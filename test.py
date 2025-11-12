@@ -1,6 +1,17 @@
 from carla2traj import Carla2Traj
-from traj2x import Traj2OSI
+from traj2osi import Traj2OSI
 
-traj = Carla2Traj.from_file("../synergies-carla-scenic/RiRun/traj_20251111_134532.parquet")  # Load existing trajectory data
+traj = Carla2Traj.from_file(
+    "/THISREPO/RiRun/traj_20251112_101757.parquet"
+)  # Load existing trajectory data
 
-traj.convert(Traj2OSI, "output.osi", converter_args={"country_code": 752, "version": "0.1.0"})  # Convert and save to OSI format
+traj.convert(
+    Traj2OSI,
+    "output.osi",
+    converter_args={
+        "country_code": 752,
+        "version": "0.1.0",
+        "proj_string": "",
+        "map_reference": "Town01.xodr",
+    },
+)  # Convert and save to OSI format

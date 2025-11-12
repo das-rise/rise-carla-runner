@@ -54,14 +54,14 @@ class Carla2Traj:
                 actor_snapshot.get_transform().location.z
             )
 
-            orientation_x = self._convert_carlaRotation_pitch_to_osi(
+            orientation_x = self._convert_carlaRotation_roll_to_osi(
+                actor_snapshot.get_transform().rotation.roll
+            )
+            orientation_y = self._convert_carlaRotation_pitch_to_osi(
                 actor_snapshot.get_transform().rotation.pitch
             )
-            orientation_y = self._convert_carlaRotation_yaw_to_osi(
+            orientation_z = self._convert_carlaRotation_yaw_to_osi(
                 actor_snapshot.get_transform().rotation.yaw
-            )
-            orientation_z = self._convert_carlaRotation_roll_to_osi(
-                actor_snapshot.get_transform().rotation.roll
             )
 
             velocity = list(

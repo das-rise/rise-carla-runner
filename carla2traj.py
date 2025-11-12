@@ -235,7 +235,7 @@ if __name__ == "__main__":
 Example usage: python carla2traj.py traj.parquet osi 752 0.1.0 '' 'Town01.xodr' -o output.osi
 To generate the CARLA trajectory parquet file, please confer the README.md in this repository.
         """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "parquet_file",
@@ -249,10 +249,14 @@ To generate the CARLA trajectory parquet file, please confer the README.md in th
         help="Output format: 'osi' or 'openlabel'",
     )
     parser.add_argument(
-        "arg1", type=int, help="For OSI: ISO country_code (int), For OpenLabel: dummy argument A"
+        "arg1",
+        type=int,
+        help="For OSI: ISO country_code (int), For OpenLabel: dummy argument A",
     )
     parser.add_argument(
-        "arg2", type=str, help="For OSI: version (X.Y.Z), For OpenLabel: dummy argument B"
+        "arg2",
+        type=str,
+        help="For OSI: version (X.Y.Z), For OpenLabel: dummy argument B",
     )
     parser.add_argument(
         "arg3",

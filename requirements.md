@@ -54,7 +54,7 @@ The following information is to be repeated for every frame / every `GroundTruth
 |. . icon|TrafficLightClassificationIcon<br><br>(Other, none, arrow_straight_ahead, arrow_left, arrow_diag_left, arrow_straight_ahead_left, arrow_right, ...)||
 |. . mode|TrafficLightClassificationMode<br><br>(Other, off, constant, flashing, counting)||
 |. . counter|float||
-|. . is_out_of_servcie|bool||
+|. . is_out_of_service|bool||
 |. source_reference|list[ExternalReference]<br><br>The source reference maps the dynamic OSI traffic light information to the static traffic light information in the OpenDRIVE map.||
 
 ## Format specification

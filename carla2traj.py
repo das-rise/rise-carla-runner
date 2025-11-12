@@ -228,14 +228,15 @@ class Carla2Traj:
 
 if __name__ == "__main__":
     import argparse
+    from rich_argparse import RichHelpFormatter
 
     parser = argparse.ArgumentParser(
         description="Convert CARLA trajectory data to OmegaPrime-compliant OSI or OpenLabel format",
         epilog="""
-Example usage: python carla2traj.py traj.parquet osi 752 0.1.0 '' 'Town01.xodr' -o output.osi
+Example usage: `python carla2traj.py traj.parquet osi 752 0.1.0 "" "Town01.xodr" -o output.osi`
 To generate the CARLA trajectory parquet file, please confer the README.md in this repository.
         """,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=RichHelpFormatter,
     )
     parser.add_argument(
         "parquet_file",

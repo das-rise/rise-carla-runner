@@ -9,6 +9,7 @@ the [OmegaPrime](https://github.com/ika-rwth-aachen/omega-prime/blob/main/docs/o
 
 ## How-to
 
+The relevant `python` code is found in the [`python/`](python/) folder.
 First, the trajectories inside a `Carla` simulation are recorded. To do this, a `polars` DataFrame containing annotations for every frame of a `Carla` simulation is generated.
 Inside a `carla.Client`, this can be done as such:
 
@@ -51,6 +52,11 @@ Options:
   -h, --help            show this help message and exit
   -o, --output OUTPUT   Output file path (default: auto-generated based on format)
 ```
+
+# Visualization
+
+See [`jupyter/omega_prime_viz.ipynb`](jupyter/omega_prime_viz.ipynb). Activate the development environment before accessing the notebook.
+
 
 # Development
 

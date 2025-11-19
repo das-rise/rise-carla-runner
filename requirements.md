@@ -69,6 +69,6 @@ The following rules apply to OMEGA-PRIME multi-channel trace files:
 
 ## Map reference
 
-![MCAP file with embedded OpenDRIVE map](mcap_file.png)
+![MCAP file with embedded OpenDRIVE map](media/mcap_file.png)
 
 We make the design choice to store the `OpenDrive` map in the MCAP topic `ground_truth_map`, ensuring that the association between map and ground truth can not be lost. Map references must be ensured to match!

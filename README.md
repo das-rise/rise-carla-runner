@@ -1,6 +1,6 @@
 # OSI-Gen
 
-This work is performed as part of the [Synergies](https://synergies-ccam.eu/) project.
+
 
 ## Goal
 
@@ -58,3 +58,11 @@ To further develop the code, use the `conda` environment file in `environment.ym
 ```bash
 conda env create -f environment.yml
 ```
+
+# Acknowledgments
+
+This software was developed as part of the [Synergies](https://synergies-ccam.eu/) project.
+
+![Synergies-logo](media/synergies.svg)
+
+Funded by the European Union. Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or European Climate, Infrastructure and Environment Executive Agency (CINEA). Neither the European Union nor the granting authority can be held responsible for them.

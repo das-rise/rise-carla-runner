@@ -1,13 +1,15 @@
 # OSI-Gen
 
-
-
-## Goal
-
 Create a python functionality that enables to generate `OpenSimulationInterface` (`OSI`) trace files carrying `GroundTruth` information compliant with 
 the [OmegaPrime](https://github.com/ika-rwth-aachen/omega-prime/blob/main/docs/omega_prime_specification.md) format developed in the Synergies project. For more details about the requirements, check [`requirements.md`](requirements.md).
 
-## How-to
+## Features
+
+ - **Carla trajectory recording**: Record trajectories of vehicles inside a Carla simulation with the help of a simple function call inside of a `Carla` client that is `tick()`-ing the simulation
+ - **Recording conversion**: Convert recordings into an `OmegaPrime` / OSI trace file from the command line
+ - **Extendability**: From the internal recordings format (easily-readable Polars dataframe), convert to additional output formats such as ASAM OpenLabel
+
+## Quickstart
 
 The relevant `python` code is found in the [`python/`](python/) folder.
 First, the trajectories inside a `Carla` simulation are recorded. To do this, a `polars` DataFrame containing annotations for every frame of a `Carla` simulation is generated.
@@ -53,19 +55,21 @@ Options:
   -o, --output OUTPUT   Output file path (default: auto-generated based on format)
 ```
 
-# Visualization
+## Visualization
 
 See [`jupyter/omega_prime_viz.ipynb`](jupyter/omega_prime_viz.ipynb). Activate the development environment before accessing the notebook.
 
 
-# Development
+## Development
 
 To further develop the code, use the `conda` environment file in `environment.yml`:
 ```bash
 conda env create -f environment.yml
 ```
 
-# Acknowledgments
+## Acknowledgments
+
+The generation of OSI files in this project relies on the [`betterosi`](https://github.com/ika-rwth-aachen/betterosi) package.
 
 This software was developed as part of the [Synergies](https://synergies-ccam.eu/) project.
 

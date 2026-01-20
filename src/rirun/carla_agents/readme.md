@@ -1,0 +1,1 @@
+This folder is a copy of the `carla/PythonAPI/carla/agents` folder from the `Carla 0.9.15` [release](https://github.com/carla-simulator/carla/tree/0.9.15/PythonAPI/carla/agents).

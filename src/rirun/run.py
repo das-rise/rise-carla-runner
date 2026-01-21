@@ -326,10 +326,10 @@ def main() -> None:
         traj_recorder.save()
         if success:
             logging.info("Simulation completed successfully.")
+            quit(0)
         else:
             logging.warning("Simulation did not complete successfully.")
-        quit()
-
+            quit(1)
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)

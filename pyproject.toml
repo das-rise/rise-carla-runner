@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A Carla runner for creating parametrizable scenarios from real-world automotive scenes"
 readme = "README.md"
 requires-python = ">=3.8,<3.9"
-license = { text = "Proprietary" }
+license = { text = "GPL-3.0 AND MIT AND APACHE-2.0" }
 
 authors = [
   { name = "Bastian Havers-Zulka", email = "bastian.havers-zulka@ri.se" }

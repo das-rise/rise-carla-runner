@@ -5,7 +5,7 @@
     <header revMajor="1" revMinor="4" name="" version="1.00" date="Tue Jan 20 13:04:44 2026" north="2511.41" south="0.00" east="2378.34" west="0.00">
         <geoReference>
  <![CDATA[
- +proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs          
+ +proj=tmerc +lat_0=0 +lon_0=9 +k_0=0.9996 +x_0=500000 +y_0=0 +datum=WGS84 +ellps=WGS84 +units=m +no_defs          
 ]]>
         </geoReference>
         <offset x="678710.40" y="6374600.42" z="-0.00" hdg="0"/>

@@ -21,12 +21,12 @@ class TrajectoryPoint(NamedTuple):
 
 class Trajectory:
 
-    def __init__(self, bare_route: List[Tuple[float, float, float]]) -> None:
+    def __init__(self, bare_route: List[Tuple]) -> None:
         """
         Create an instance of Trajectory containing a bare route.
 
         Args:
-            bare_route (List[Tuple[float, float, float]):   A route passed as a list of (x=easting, y=northing, time)
+            bare_route (List[Tuple):   A route passed as a list of (x=easting, y=northing, time s, [heading deg], [speed km/h]) tuples
         """
         self._x = []
         self._y = []
@@ -35,14 +35,48 @@ class Trajectory:
         self._s = []
         self._len_trajectory = 0
 
-        self._has_headings = False
-        self._has_speeds = False
+        num_fields = len(bare_route[0])
 
-        for x, y, t in bare_route:
-            self._x.append(x)
-            self._y.append(y)
-            self._t.append(t)
-            self._len_trajectory += 1
+        if num_fields == 3:
+            # No headings, no speeds
+            self._has_headings = False
+            self._has_speeds = False
+
+            for x, y, t in bare_route:
+                self._x.append(x)
+                self._y.append(y)
+                self._t.append(t)
+                self._len_trajectory += 1
+
+        elif num_fields == 4:
+            # Has headings, no speeds
+            self._has_headings = True
+            self._has_speeds = False
+
+            for x, y, t, h in bare_route:
+                self._x.append(x)
+                self._y.append(y)
+                self._t.append(t)
+                self._h.append(h)
+                self._len_trajectory += 1
+
+        elif num_fields == 5:
+            # Has headings, has speeds
+            self._has_headings = True
+            self._has_speeds = True
+
+            for x, y, t, h, s in bare_route:
+                self._x.append(x)
+                self._y.append(y)
+                self._t.append(t)
+                self._h.append(h)
+                self._s.append(s)
+                self._len_trajectory += 1
+
+        else:
+            raise ValueError(
+                f"Bare route has invalid number of fields ({num_fields}). Expected 3, 4 or 5."
+            )
 
     def get_trajectory(self) -> Generator[TrajectoryPoint, None, None]:
         """
@@ -97,7 +131,7 @@ class Trajectory:
         Add speeds to a trajectory.
 
         Args:
-            speeds (List[float]): The current speed in the trajectory
+            speeds (List[float]): The current speed in the trajectory in km/h
         """
         assert (
             len(speeds) == self._len_trajectory
@@ -234,8 +268,8 @@ class Trajectory:
 def process_trajectory_file(trajectory_filepath) -> Trajectory:
     """Process a trajectory file and return a Trajectory object.
 
-    A trajectory file is expected to be a CSV file containing lines with three comma-separated values:
-    x-coordinate (float), y-coordinate (float), and timestamp (float). The function reads the file,
+    A trajectory file is expected to be a CSV file containing lines with three to five comma-separated values:
+    x-coordinate (float), y-coordinate (float), timestamp (float) [and angle (degrees)] [and speed (km/h)]. The function reads the file,
     converts the coordinates to the Carla coordinate system, and generates heading and speed information
     for the trajectory.
 
@@ -246,17 +280,28 @@ def process_trajectory_file(trajectory_filepath) -> Trajectory:
         Trajectory: A processed Trajectory object.
     """
     bare_route = []
+    firstline = True
+    num_fields = 0
     with open(trajectory_filepath) as openf:
         for line in openf:
-            try:
-                x, y, t = [float(l) for l in line.split(",")]
-                bare_route.append((x, y, t))
-            except:
+            if firstline:
+                num_fields = len(line.split(","))
+                if num_fields < 3 or num_fields > 5:
+                    raise ValueError(
+                        f"Trajectory file {trajectory_filepath} has invalid number of fields ({num_fields}). Expected 3 to 5."
+                    )
+                firstline = False
                 continue
+            line_readings = tuple([float(reading) for reading in line.split(",")])
+            bare_route.append(line_readings)
     trajectory = Trajectory(bare_route)
     trajectory.apply_carla_coord_conversion()
-    trajectory.gen_speeds()
-    trajectory.gen_headings()
+    if num_fields == 3:
+        trajectory.gen_speeds()
+        trajectory.gen_headings()
+    elif num_fields == 4:
+        trajectory.gen_speeds()
+
     return trajectory
 
 

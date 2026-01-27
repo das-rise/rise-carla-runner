@@ -256,6 +256,7 @@ def main() -> None:
         )
         vehicles.append(pcla_vehicle)
 
+    success = True
     try:
         spinner.update_message("Stepping simulation")
 
@@ -301,13 +302,18 @@ def main() -> None:
                 snapshot.timestamp.elapsed_seconds - start_time
             )
             [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
+
+            # check if any vehicle has fallen off the road
+            if not all([v.has_valid_z() for v in vehicles]):
+                raise Exception("A vehicle has fallen off the road. Aborting simulation.")
+
             spinner.update_message(
                 f"Stepping simulation {round(adjusted_elapsed_sim_seconds/args.simulation_duration * 100)}%"
             )
-            # [print(v.name, v.get_actor().get_location()) for v in vehicles]
 
     except Exception as e:
         logging.error(f"Exception! --> {e}", exc_info=True)
+        success = False
 
     finally:
         if spinner is not None:
@@ -318,8 +324,12 @@ def main() -> None:
         cam.stop_recording()
         print(f"Video saved to: {cam.video_path}")
         traj_recorder.save()
-        quit()
-
+        if success:
+            logging.info("Simulation completed successfully.")
+            quit(0)
+        else:
+            logging.warning("Simulation did not complete successfully.")
+            quit(1)
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)

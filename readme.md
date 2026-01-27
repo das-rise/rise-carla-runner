@@ -1,6 +1,27 @@
-# PART 1
+# Rise-Carla-Runner
 
-# Getting Carla setup in a container
+## Setup
+
+Make sure you have `conda` installed. Then, install all required dependencies with
+``` bash
+make rebuild
+```
+This will create a `conda` environment called `rirun` and install into that all required dependencies.
+
+> [!IMPORTANT]
+> Make sure that you activate the environment using `conda activate rirun` before running any experiments.
+
+
+Alternatively, checkout
+``` bash
+make help
+```
+for a custom installation.
+
+
+## Getting Carla set up in a container
+
+You will need a `Carla 0.9.15` server for the simulations. It is most portable to spin one up using Docker, as described in the following:
 
 First, setup `Docker` for your user:
 
@@ -23,63 +44,38 @@ Before running `Carla` in the container, we need to install the `nvidia-docker2`
 **On the `Synergies` server, this is already installed.**
 Else, follow the instructions from https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#installation-guide.
 
-# Building and starting the Carla container
+### Building and starting the Carla container
 
 *Either:*
 Execute:
-```
+```bash
 docker build -t carla-synergies .
 ```
 Then, start the container and Carla inside it:
-```
-docker run -d --privileged --gpus=all --net=host carla-synergies /bin/bash ./CarlaUE4.sh -RenderOffScreen
-```
-
-*Or:*
-Execute:
-```
+```bash
 bash start-carla-docker.sh
 ```
 
-# Stopping Carla
+### Stopping Carla
 
 *Either:*
 Find the Carla container's id by hand:
-```
+```bash
 docker ps | grep carla-synergies
 ```
 And stop it:
-```
+```bash
 docker kill ID_HERE
 ```
 
 *Or:*
 Execute:
-```
+```bash
 bash stop-carla-docker.sh
 ```
 
-# Running Carla clients or Scenic
 
-For running Carla clients that interact with the running Carla docker server, or for running Scenic examples, download and install `Anaconda` first.
-After having activated `Anaconda`, execute
-```
-conda env create -f conda-env.yml
-```
-From within this environment, you have access to the `scenic` and `carla` python packages.
-
------------------------------------------
-
-# Part 2
-
-# Idea
-
-In this directory, we will collect an OpenDrive file
-together with scripts to follow waypoints within the map,
-as well as scripts for one or more simple agent(s) that follow(s)
- such waypoints.
-
-# Example run
+## Example run
 
 ```bash
 python run.py 15 PCLA-Town01/Town01.xodr PCLA-Town01/vehicle1_route.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route PCLA-Town01/agent_route.xml --ego_camera
@@ -93,10 +89,23 @@ Best to learn about usage of `run.py` by executing
 python run.py --help
 ```
 
-# PCLA agent route generation
+## Procesing `.parquet` trajectories
+`make install` (which is run, for example, by `make rebuild`) will also install `traj-convert`, a python package that is used for creating `.parquet` files for every simulation run. These files contain all required information for building an `OSI` file that is compatible with the `Omega Prime` file format used in the Synergies project. 
+To convert the `.parquet` file to `OSI`, run the following (with the `rirun` environment activated in `conda`):
+```bash
+python -m traj_convert <<trajectory_file.parquet>> osi <<ISO_country_code>> <<version>> <<projection_string>> <<path_to_opendrive>> -o <<output_file.osi>>
+```
+
+For example:
+```bash
+python -m traj_convert traj.parquet osi 752 0.1.0 "" "Town01.xodr" -o output.osi
+```
+
+
+## PCLA agent route generation
 
 An example of how the `xml` file defining the waypoints for a PCLA agent can be created is found in `PCLA-Town01/generate_agent_route.py`, there for the example of `Town01.xodr`. However, it is straightforwardly generalizable from there.
 
-# PCLA addendum
+## PCLA addendum
 
 This repository contains an edited version of the `PCLA` [repository](https://github.com/MasoudJTehrani/PCLA).

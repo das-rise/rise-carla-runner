@@ -5,3 +5,4 @@ src/rirun/carla_agents/__pycache__/*
 src/rirun/carla_agents/navigation/__pycache__/*
 src/rirun/carla_agents/tools/__pycache__/*
 src/rirun.egg-info/*
+.vscode/*

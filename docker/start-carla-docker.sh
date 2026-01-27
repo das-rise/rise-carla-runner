@@ -50,7 +50,7 @@ else
     # will use carla 0.9.15
     docker build -t carla-synergies-0.9.15 . || { echo "Errors during docker build, exiting."; exit 1; }
     docker run -d --privileged \
-	--gpus=all --net=host \
+	--gpus=all -p 2000:2000 -p 2001:2001 \
 	carla-synergies-0.9.15 \
 	/bin/bash ./CarlaUE4.sh -RenderOffScreen
 fi

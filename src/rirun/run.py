@@ -1,4 +1,3 @@
-import os
 import argparse
 from rich_argparse import RichHelpFormatter
 import signal
@@ -14,7 +13,7 @@ from spinner import Spinner
 from bling import rirun
 import math
 from stats import Average_Distance_Interpolated
-from PCLA_agents import PCLA_Agent
+from PCLA_agents import PCLA_Agent, check_agent_env
 from traj_convert.carla2traj import Carla2Traj
 from carla_tools import load_map
 
@@ -120,32 +119,10 @@ def parse_arguments():
 
     # Validate required environment variables based on chosen PCLA agent
     if args.pcla_agent:
-        agent = args.pcla_agent
-        if agent.startswith("tfpp_l6_"):
-            if not os.environ.get("UNCERTAINTY_THRESHOLD"):
-                parser.error(
-                    "--pcla_agent requires UNCERTAINTY_THRESHOLD=0.33 environment variable for tfpp_l6 agents"
-                )
-        elif agent.startswith("tfpp_lav_"):
-            if not os.environ.get("STOP_CONTROL"):
-                parser.error(
-                    "--pcla_agent requires STOP_CONTROL=1 environment variable for tfpp_lav agents"
-                )
-        elif agent.startswith("tfpp_aim_"):
-            if not os.environ.get("DIRECT"):
-                parser.error(
-                    "--pcla_agent requires DIRECT=0 environment variable for tfpp_aim agents"
-                )
-        elif agent.startswith("tfpp_wp_"):
-            if not os.environ.get("DIRECT"):
-                parser.error(
-                    "--pcla_agent requires DIRECT=0 environment variable for tfpp_wp agents"
-                )
-        elif agent == "if_if":
-            if not os.environ.get("ROUTES"):
-                parser.error(
-                    "--pcla_agent requires ROUTES=path_to_agent_route_xml environment variable for if_if agent"
-                )
+        try:
+            check_agent_env(PCLA_Agent(args.pcla_agent))
+        except RuntimeError as e:
+            parser.error(str(e))
 
     return args
 

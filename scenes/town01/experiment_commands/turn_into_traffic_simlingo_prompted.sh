@@ -1,4 +1,5 @@
-export SIMLINGO_CUSTOM_PROMPT="When there is a vehicle in front of you, overtake it by passing it on the left side."
+export SIMLINGO_CUSTOM_PROMPT="Do not overtake the blue vehicle in front of you. What should the ego do next?"
+export SIMLINGO_USER_FLAG=1
 python run.py \
     15 \
     Town01 \
@@ -10,3 +11,4 @@ python run.py \
     --ego_camera
 
 unset SIMLINGO_CUSTOM_PROMPT
+unset SIMLINGO_USER_FLAG

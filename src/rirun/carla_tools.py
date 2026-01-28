@@ -3,7 +3,7 @@ Tools essential for manipulating Carla from the client-side
 """
 
 import carla
-
+import logging
 from carla_agents.navigation.global_route_planner import GlobalRoutePlanner
 
 
@@ -43,9 +43,6 @@ def show_route_in_world(world: carla.World, route: list) -> None:
         world.debug.draw_point(
             location, size=0.15, life_time=0, color=carla.Color(255, 0, 0)
         )
-
-    # world.debug.draw_point(route_locations[0], size=0.19, life_time=0, color=carla.Color(0,255,0))
-    # world.debug.draw_point(route_locations[-1], size=0.19, life_time=0, color=carla.Color(255,0,0))
 
 
 def highlight_location(world: carla.World, loc: carla.Location) -> None:
@@ -101,3 +98,49 @@ def draw_origin(world: carla.World, scale: float = 1.0) -> None:
         color=carla.Color(0, 0, 255),
         life_time=0,
     )
+
+
+def _load_from_opendrive(client: carla.Client, xodr_filepath: str) -> None:
+    """
+    Load a CARLA world from an OpenDRIVE (.xodr) file.
+
+    Args:
+        client (carla.Client): The CARLA client instance.
+        xodr_filepath (str): Path to the OpenDRIVE file.
+    """
+    xodr_string = ""
+    with open(xodr_filepath, "r") as openf:
+        xodr_string = openf.read()
+    logging.info(f"Loading world from OpenDrive file {xodr_filepath}...")
+    client.generate_opendrive_world(
+        xodr_string,
+        carla.OpendriveGenerationParameters(
+            wall_height=0, smooth_junctions=False, additional_width=0
+        ),
+    )
+
+
+def _load_from_carla_map(client: carla.Client, map_name: str) -> None:
+    """
+    Load a CARLA world directly from a CARLA map.
+
+    Args:
+        client (carla.Client): The CARLA client instance.
+        map_path (str): Path to the CARLA map.
+    """
+    logging.info(f"Loading world from CARLA map {map_name}...")
+    client.load_world(map_name)
+
+
+def load_map(client: carla.Client, map_file: str) -> None:
+    """
+    Load a CARLA world from either an OpenDRIVE (.xodr) file or a CARLA map (.snet) file.
+
+    Args:
+        client (carla.Client): The CARLA client instance.
+        map_path (str): Path to the OpenDRIVE or CARLA map file.
+    """
+    if map_file.endswith(".xodr"):
+        _load_from_opendrive(client, map_file)
+    else:
+        _load_from_carla_map(client, map_file)

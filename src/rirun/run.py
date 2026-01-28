@@ -16,6 +16,7 @@ import math
 from stats import Average_Distance_Interpolated
 from PCLA_agents import PCLA_Agent
 from traj_convert.carla2traj import Carla2Traj
+from carla_tools import load_map
 
 # Helper functions
 
@@ -40,7 +41,7 @@ def execute(bash_str: str) -> None:
     """
     Execute given string as process.
     Args:
-    bash_str (str): The command to execute.
+        bash_str (str): The command to execute.
     """
     try:
         logging.info(f"Calling '{bash_str}'")
@@ -53,35 +54,19 @@ def execute(bash_str: str) -> None:
         logging.error(f"Error when running: {e}")
 
 
-def load_from_opendrive(client: carla.Client, xodr_filepath: str) -> None:
-    """
-    Load a CARLA world from an OpenDRIVE (.xodr) file.
-    Args:
-    client (carla.Client): The CARLA client instance.
-    """
-    xodr_string = ""
-    with open(xodr_filepath, "r") as openf:
-        xodr_string = openf.read()
-    logging.info(f"Loading world from OpenDrive file {xodr_filepath}...")
-    client.generate_opendrive_world(
-        xodr_string,
-        carla.OpendriveGenerationParameters(
-            wall_height=0, smooth_junctions=False, additional_width=0
-        ),
-    )
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(
         prog="RiRun - RISE Carla Scene Runner",
-        description="Run a scene in Carla from a file containing vehicle trajectories + an OpenDrive file",
+        description="Run a scene in Carla from a file containing vehicle trajectories + an OpenDrive/Carla map file",
         formatter_class=RichHelpFormatter,
     )
     parser.add_argument(
         "simulation_duration", type=float, help="Duration of the simulation in seconds."
     )
     parser.add_argument(
-        "opendrive_filepath", type=str, help="Path to OpenDrive file (*.xodr)."
+        "map_filepath",
+        type=str,
+        help="Path to OpenDrive (*.xodr) or Carla map (*.snet) file.",
     )
     parser.add_argument(
         "trajectory_filepaths",
@@ -185,7 +170,7 @@ def main() -> None:
 
     # Connect to Carla server
     client = carla.Client(carla_host, carla_ip)
-    load_from_opendrive(client, args.opendrive_filepath)
+    load_map(client, args.map_filepath)
     world = client.reload_world()
 
     # Set server to fixed time-step and synchronous (unless --asynchronous)
@@ -197,9 +182,6 @@ def main() -> None:
         settings.fixed_delta_seconds = timestep
     world.apply_settings(settings)
 
-    logging.info(
-        f"Chosen settings: timestep {timestep}; synchronous mode {not args.asynchronous}"
-    )
     logging.info(f"{world.get_settings()}")
 
     traj_recorder = Carla2Traj(world, debug=False)
@@ -305,7 +287,9 @@ def main() -> None:
 
             # check if any vehicle has fallen off the road
             if not all([v.has_valid_z() for v in vehicles]):
-                raise Exception("A vehicle has fallen off the road. Aborting simulation.")
+                raise Exception(
+                    "A vehicle has fallen off the road. Aborting simulation."
+                )
 
             spinner.update_message(
                 f"Stepping simulation {round(adjusted_elapsed_sim_seconds/args.simulation_duration * 100)}%"
@@ -330,6 +314,7 @@ def main() -> None:
         else:
             logging.warning("Simulation did not complete successfully.")
             quit(1)
+
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)

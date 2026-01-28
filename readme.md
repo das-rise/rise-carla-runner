@@ -76,12 +76,13 @@ bash stop-carla-docker.sh
 
 
 ## Example run
+From within `src/rirun`,
 
 ```bash
-python run.py 15 PCLA-Town01/Town01.xodr PCLA-Town01/vehicle1_route.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route PCLA-Town01/agent_route.xml --ego_camera
+python run.py 15 ../../scenes/town01/maps/Town01.xodr ../../scenes/town01/npc_test_routes/vehicle1_straight.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route ../../scenes/town01/agent_routes/agent_route.xml --ego_camera
 ```
 
-will use the `PCLA` agent `NEAT_AIM2DDEPTH`, primed to follow the route in PCLA-Town01/agent_route.xml, with the camera attached to the `ego_vehicle`.
+will use the `PCLA` agent `NEAT_AIM2DDEPTH`, primed to follow the route in agent_route.xml, with the camera attached to the `ego_vehicle`.
 
 Best to learn about usage of `run.py` by executing
 
@@ -104,7 +105,7 @@ python -m traj_convert traj.parquet osi 752 0.1.0 "" "Town01.xodr" -o output.osi
 
 ## PCLA agent route generation
 
-An example of how the `xml` file defining the waypoints for a PCLA agent can be created is found in `PCLA-Town01/generate_agent_route.py`, there for the example of `Town01.xodr`. However, it is straightforwardly generalizable from there.
+An example of how the `xml` file defining the waypoints for a PCLA agent can be created is found in `scenes/ekas-landvag/generate_agent_route.py`, there for the example of `Town01.xodr`. However, it is straightforwardly generalizable from there.
 
 ## PCLA addendum
 

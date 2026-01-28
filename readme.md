@@ -40,29 +40,16 @@ First, setup `Docker` for your user:
 Great! Now, we pull the `Carla` container (needs to download a few GBs of data):
 `docker pull carlasim/carla:0.9.15`
 
-Before running `Carla` in the container, we need to install the `nvidia-docker2` package. 
-**On the `Synergies` server, this is already installed.**
-Else, follow the instructions from https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#installation-guide.
+Before running `Carla` in the container, we need to install the `nvidia-docker2` package. Follow the instructions from https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#installation-guide.
 
-### Building and starting the Carla container
+### Building, starting and stopping the Carla container
 
-*Either:*
-Execute:
-```bash
-docker build -t carla-synergies .
-```
-Then, start the container and Carla inside it:
+*Build and start:*
 ```bash
 bash start-carla-docker.sh
 ```
 
-### Stopping Carla
-
-*Either:*
-Find the Carla container's id by hand:
-```bash
-docker ps | grep carla-synergies
-```
+*Stop:*
 And stop it:
 ```bash
 docker kill ID_HERE

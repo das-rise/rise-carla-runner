@@ -87,7 +87,7 @@ def check_agent_env(agent: PCLA_Agent) -> None:
                 "ROUTES=<<path_to_agent_route.xml>> environment variable not found for if_if agent"
             )
     elif agent == PCLA_Agent.SIMLINGO_RIRUN:
-        if not os.environ.get("SIMLINGO_CUSTOM_PROMPT"):
+        if not os.environ.get("SIMLINGO_CUSTOM_PROMPT") or not os.environ.get("SIMLINGO_USER_FLAG"):
             raise RuntimeError(
-                "SIMLINGO_CUSTOM_PROMPT=<<your_prompt>> environment variable not found for simlingo_rirun agent"
+                "SIMLINGO_CUSTOM_PROMPT=<<your_prompt>> and/or SIMLINGO_USER_FLAG=[0|1|2|3|4] environment variables not found for simlingo_rirun agent"
             )

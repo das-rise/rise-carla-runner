@@ -39,7 +39,10 @@ try:
     CUSTOM_PROMPT = os.environ["SIMLINGO_CUSTOM_PROMPT"]
 except KeyError:
     raise KeyError("SIMLINGO_CUSTOM_PROMPT environment variable not set")
-USER_FLAG = 1
+try:
+    USER_FLAG = int(os.environ["SIMLINGO_USER_FLAG"])
+except KeyError:
+    raise KeyError("SIMLINGO_USER_FLAG environment variable not set")
 
 class RirunLingoAgent(LingoAgent):
 

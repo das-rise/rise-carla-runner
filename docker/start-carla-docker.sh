@@ -35,8 +35,10 @@ done
 
 containerid=$(docker ps | grep carla | awk ' { print $1 } ')
 if ! [[ -z "$containerid" ]]; then
-    echo "Found running Carla container: ${containerid}. Try starting another one? [enter]"
-  read
+    trap 'echo; echo "Exiting."; exit 130' INT
+    printf "Found running Carla container: %s. Try starting another one? [enter or Ctrl+C] " "$containerid"
+    read -s -r  # -s = silent, input is not echoed
+    echo    # add newline
 fi
 
 if  [ "$ue5" = true ]; then
@@ -48,9 +50,9 @@ if  [ "$ue5" = true ]; then
 else
     # use our custom Dockerfile to include the scenario-runner in the container,
     # will use carla 0.9.15
-    docker build -t carla-synergies-0.9.15 . || { echo "Errors during docker build, exiting."; exit 1; }
+    docker build -t carla-synergies-0.9.15 ./docker/ || { echo "Errors during docker build, exiting."; exit 1; }
     docker run -d --privileged \
-	--gpus=all -p 2000:2000 -p 2001:2001 \
+	--gpus=all -p 2000-2002:2000-2002 \
 	carla-synergies-0.9.15 \
 	/bin/bash ./CarlaUE4.sh -RenderOffScreen
 fi

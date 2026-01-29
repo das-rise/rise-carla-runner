@@ -1,4 +1,7 @@
 import argparse
+from datetime import datetime
+import os
+import time
 from rich_argparse import RichHelpFormatter
 import signal
 import sys
@@ -74,10 +77,16 @@ def parse_arguments():
         help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
     )
     parser.add_argument(
-        "--output_filepath",
+        "--camera_output_dir",
         type=str,
-        default="camera_output",
-        help="Where to store the output files. Default: ./RiRun-results",
+        default="output/camera",
+        help="Where to store the output files. Default: output/camera",
+    )
+    parser.add_argument(
+        "--traj_output_dir",
+        type=str,
+        default="output/traj",
+        help="Where to store the output files. Default: output/traj",
     )
     parser.add_argument(
         "--timestep", type=float, help="Set time step in seconds. Default: 0.01"
@@ -128,7 +137,6 @@ def parse_arguments():
 
 
 def main() -> None:
-
     args = parse_arguments()
 
     if not args.carla_address:
@@ -149,6 +157,14 @@ def main() -> None:
     client = carla.Client(carla_host, carla_ip)
     load_map(client, args.map_filepath)
     world = client.reload_world()
+    # Wait until the map is fully loaded
+
+    timeout = 10.0  # seconds
+    start_time = time.time()
+    while world.get_map() is None:
+        if time.time() - start_time > timeout:
+            raise RuntimeError("Map failed to load in time")
+        time.sleep(0.1)
 
     # Set server to fixed time-step and synchronous (unless --asynchronous)
     settings = world.get_settings()
@@ -177,7 +193,7 @@ def main() -> None:
     vehicles = []
     start_vectors = []
     for i, trajectory in enumerate(trajectories_list):
-        car_name = f"car{i+1}"
+        car_name = f"car{i + 1}"
         statistic = Average_Distance_Interpolated()
         new_vehicle = Vehicle(
             world,
@@ -216,6 +232,7 @@ def main() -> None:
         vehicles.append(pcla_vehicle)
 
     success = True
+    start_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     try:
         spinner.update_message("Stepping simulation")
 
@@ -237,11 +254,13 @@ def main() -> None:
         cam_loc = (start_of_trajectory.x, start_of_trajectory.y, 20)
 
         # Start camera
+        camera_output_filename = f"camera_{start_ts}"
         cam = StreamingCamera(
             world,
             loc=cam_loc,
             fps=1 / timestep if timestep else 30,  # fallback for asynchronous mode
-            output_dir=args.output_filepath,
+            output_dir=args.camera_output_dir,
+            video_name=camera_output_filename,
             preferred_fourccs=["mp4v"],
             ego_vehicle=(
                 [v for v in vehicles if hasattr(v, "_actor")][0]
@@ -269,7 +288,7 @@ def main() -> None:
                 )
 
             spinner.update_message(
-                f"Stepping simulation {round(adjusted_elapsed_sim_seconds/args.simulation_duration * 100)}%"
+                f"Stepping simulation {round(adjusted_elapsed_sim_seconds / args.simulation_duration * 100)}%"
             )
 
     except Exception as e:
@@ -284,7 +303,11 @@ def main() -> None:
         )
         cam.stop_recording()
         print(f"Video saved to: {cam.video_path}")
-        traj_recorder.save()
+        traj_output_filepath = os.path.join(
+            args.traj_output_dir, f"traj_{start_ts}.parquet"
+        )
+        os.makedirs(os.path.dirname(traj_output_filepath), exist_ok=True)
+        traj_recorder.save(traj_output_filepath)
         if success:
             logging.info("Simulation completed successfully.")
             quit(0)

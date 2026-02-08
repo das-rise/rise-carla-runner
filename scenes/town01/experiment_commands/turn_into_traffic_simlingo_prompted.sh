@@ -1,6 +1,6 @@
 export SIMLINGO_CUSTOM_PROMPT="Do not overtake the blue vehicle in front of you. What should the ego do next?"
 export SIMLINGO_USER_FLAG=1
-python run.py \
+python src/rirun/run.py \
     15 \
     Town01 \
     scenes/town01/npc_test_routes/vehicle1_straight.csv \

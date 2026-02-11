@@ -1,5 +1,7 @@
-import os
 import argparse
+from datetime import datetime
+import os
+import time
 from rich_argparse import RichHelpFormatter
 import signal
 import sys
@@ -14,8 +16,9 @@ from spinner import Spinner
 from bling import rirun
 import math
 from stats import Average_Distance_Interpolated
-from PCLA_agents import PCLA_Agent
+from PCLA_agents import PCLA_Agent, check_agent_env
 from traj_convert.carla2traj import Carla2Traj
+from carla_tools import load_map
 
 # Helper functions
 
@@ -40,7 +43,7 @@ def execute(bash_str: str) -> None:
     """
     Execute given string as process.
     Args:
-    bash_str (str): The command to execute.
+        bash_str (str): The command to execute.
     """
     try:
         logging.info(f"Calling '{bash_str}'")
@@ -53,35 +56,19 @@ def execute(bash_str: str) -> None:
         logging.error(f"Error when running: {e}")
 
 
-def load_from_opendrive(client: carla.Client, xodr_filepath: str) -> None:
-    """
-    Load a CARLA world from an OpenDRIVE (.xodr) file.
-    Args:
-    client (carla.Client): The CARLA client instance.
-    """
-    xodr_string = ""
-    with open(xodr_filepath, "r") as openf:
-        xodr_string = openf.read()
-    logging.info(f"Loading world from OpenDrive file {xodr_filepath}...")
-    client.generate_opendrive_world(
-        xodr_string,
-        carla.OpendriveGenerationParameters(
-            wall_height=0, smooth_junctions=False, additional_width=0
-        ),
-    )
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(
         prog="RiRun - RISE Carla Scene Runner",
-        description="Run a scene in Carla from a file containing vehicle trajectories + an OpenDrive file",
+        description="Run a scene in Carla from a file containing vehicle trajectories + an OpenDrive/Carla map file",
         formatter_class=RichHelpFormatter,
     )
     parser.add_argument(
         "simulation_duration", type=float, help="Duration of the simulation in seconds."
     )
     parser.add_argument(
-        "opendrive_filepath", type=str, help="Path to OpenDrive file (*.xodr)."
+        "map_filepath",
+        type=str,
+        help="Path to OpenDrive (*.xodr) or Carla map (*.snet) file.",
     )
     parser.add_argument(
         "trajectory_filepaths",
@@ -90,10 +77,16 @@ def parse_arguments():
         help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
     )
     parser.add_argument(
-        "--output_filepath",
+        "--camera_output_dir",
         type=str,
-        default="camera_output",
-        help="Where to store the output files. Default: ./RiRun-results",
+        default="output/camera",
+        help="Where to store the output files. Default: output/camera",
+    )
+    parser.add_argument(
+        "--traj_output_dir",
+        type=str,
+        default="output/traj",
+        help="Where to store the output files. Default: output/traj",
     )
     parser.add_argument(
         "--timestep", type=float, help="Set time step in seconds. Default: 0.01"
@@ -135,38 +128,15 @@ def parse_arguments():
 
     # Validate required environment variables based on chosen PCLA agent
     if args.pcla_agent:
-        agent = args.pcla_agent
-        if agent.startswith("tfpp_l6_"):
-            if not os.environ.get("UNCERTAINTY_THRESHOLD"):
-                parser.error(
-                    "--pcla_agent requires UNCERTAINTY_THRESHOLD=0.33 environment variable for tfpp_l6 agents"
-                )
-        elif agent.startswith("tfpp_lav_"):
-            if not os.environ.get("STOP_CONTROL"):
-                parser.error(
-                    "--pcla_agent requires STOP_CONTROL=1 environment variable for tfpp_lav agents"
-                )
-        elif agent.startswith("tfpp_aim_"):
-            if not os.environ.get("DIRECT"):
-                parser.error(
-                    "--pcla_agent requires DIRECT=0 environment variable for tfpp_aim agents"
-                )
-        elif agent.startswith("tfpp_wp_"):
-            if not os.environ.get("DIRECT"):
-                parser.error(
-                    "--pcla_agent requires DIRECT=0 environment variable for tfpp_wp agents"
-                )
-        elif agent == "if_if":
-            if not os.environ.get("ROUTES"):
-                parser.error(
-                    "--pcla_agent requires ROUTES=path_to_agent_route_xml environment variable for if_if agent"
-                )
+        try:
+            check_agent_env(PCLA_Agent(args.pcla_agent))
+        except RuntimeError as e:
+            parser.error(str(e))
 
     return args
 
 
 def main() -> None:
-
     args = parse_arguments()
 
     if not args.carla_address:
@@ -185,8 +155,16 @@ def main() -> None:
 
     # Connect to Carla server
     client = carla.Client(carla_host, carla_ip)
-    load_from_opendrive(client, args.opendrive_filepath)
+    load_map(client, args.map_filepath)
     world = client.reload_world()
+    # Wait until the map is fully loaded
+
+    timeout = 10.0  # seconds
+    start_time = time.time()
+    while world.get_map() is None:
+        if time.time() - start_time > timeout:
+            raise RuntimeError("Map failed to load in time")
+        time.sleep(0.1)
 
     # Set server to fixed time-step and synchronous (unless --asynchronous)
     settings = world.get_settings()
@@ -197,9 +175,6 @@ def main() -> None:
         settings.fixed_delta_seconds = timestep
     world.apply_settings(settings)
 
-    logging.info(
-        f"Chosen settings: timestep {timestep}; synchronous mode {not args.asynchronous}"
-    )
     logging.info(f"{world.get_settings()}")
 
     traj_recorder = Carla2Traj(world, debug=False)
@@ -218,7 +193,7 @@ def main() -> None:
     vehicles = []
     start_vectors = []
     for i, trajectory in enumerate(trajectories_list):
-        car_name = f"car{i+1}"
+        car_name = f"car{i + 1}"
         statistic = Average_Distance_Interpolated()
         new_vehicle = Vehicle(
             world,
@@ -257,6 +232,7 @@ def main() -> None:
         vehicles.append(pcla_vehicle)
 
     success = True
+    start_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     try:
         spinner.update_message("Stepping simulation")
 
@@ -278,11 +254,13 @@ def main() -> None:
         cam_loc = (start_of_trajectory.x, start_of_trajectory.y, 20)
 
         # Start camera
+        camera_output_filename = f"camera_{start_ts}"
         cam = StreamingCamera(
             world,
             loc=cam_loc,
             fps=1 / timestep if timestep else 30,  # fallback for asynchronous mode
-            output_dir=args.output_filepath,
+            output_dir=args.camera_output_dir,
+            video_name=camera_output_filename,
             preferred_fourccs=["mp4v"],
             ego_vehicle=(
                 [v for v in vehicles if hasattr(v, "_actor")][0]
@@ -305,10 +283,12 @@ def main() -> None:
 
             # check if any vehicle has fallen off the road
             if not all([v.has_valid_z() for v in vehicles]):
-                raise Exception("A vehicle has fallen off the road. Aborting simulation.")
+                raise Exception(
+                    "A vehicle has fallen off the road. Aborting simulation."
+                )
 
             spinner.update_message(
-                f"Stepping simulation {round(adjusted_elapsed_sim_seconds/args.simulation_duration * 100)}%"
+                f"Stepping simulation {round(adjusted_elapsed_sim_seconds / args.simulation_duration * 100)}%"
             )
 
     except Exception as e:
@@ -323,13 +303,18 @@ def main() -> None:
         )
         cam.stop_recording()
         print(f"Video saved to: {cam.video_path}")
-        traj_recorder.save()
+        traj_output_filepath = os.path.join(
+            args.traj_output_dir, f"traj_{start_ts}.parquet"
+        )
+        os.makedirs(os.path.dirname(traj_output_filepath), exist_ok=True)
+        traj_recorder.save(traj_output_filepath)
         if success:
             logging.info("Simulation completed successfully.")
             quit(0)
         else:
             logging.warning("Simulation did not complete successfully.")
             quit(1)
+
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)

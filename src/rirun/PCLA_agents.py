@@ -49,3 +49,45 @@ class PCLA_Agent(Enum):
 
     # Interfuser
     IF_IF = "if_if"  # Second best performing CARLA Leaderboard 1 agent
+
+
+def check_agent_env(agent: PCLA_Agent) -> None:
+    """
+    Chheck whether environment variables required by specific PCLA agents are set.
+
+    Args:
+        agent (PCLA_Agent): The PCLA agent to check environment variables for.
+    """
+
+    import os
+
+    if agent in [PCLA_Agent.TFPP_L6_0, PCLA_Agent.TFPP_L6_1, PCLA_Agent.TFPP_L6_2]:
+        if not os.environ.get("UNCERTAINTY_THRESHOLD"):
+            raise RuntimeError(
+                "UNCERTAINTY_THRESHOLD=0.33 environment variable not found for tfpp_l6 agents"
+            )
+    elif agent in [PCLA_Agent.TFPP_LAV_0, PCLA_Agent.TFPP_LAV_1, PCLA_Agent.TFPP_LAV_2]:
+        if not os.environ.get("STOP_CONTROL"):
+            raise RuntimeError(
+                "STOP_CONTROL=1 environment variable not found for tfpp_lav agents"
+            )
+    elif agent in [PCLA_Agent.TFPP_AIM_0, PCLA_Agent.TFPP_AIM_1, PCLA_Agent.TFPP_AIM_2]:
+        if not os.environ.get("DIRECT"):
+            raise RuntimeError(
+                "DIRECT=0 environment variable not found for tfpp_aim agents"
+            )
+    elif agent in [PCLA_Agent.TFPP_WP_0, PCLA_Agent.TFPP_WP_1, PCLA_Agent.TFPP_WP_2]:
+        if not os.environ.get("DIRECT"):
+            raise RuntimeError(
+                "DIRECT=0 environment variable not found for tfpp_wp agents"
+            )
+    elif agent == PCLA_Agent.IF_IF:
+        if not os.environ.get("ROUTES"):
+            raise RuntimeError(
+                "ROUTES=<<path_to_agent_route.xml>> environment variable not found for if_if agent"
+            )
+    elif agent == PCLA_Agent.SIMLINGO_RIRUN:
+        if not os.environ.get("SIMLINGO_CUSTOM_PROMPT") or not os.environ.get("SIMLINGO_USER_FLAG"):
+            raise RuntimeError(
+                "SIMLINGO_CUSTOM_PROMPT=<<your_prompt>> and/or SIMLINGO_USER_FLAG=[0|1|2|3|4] environment variables not found for simlingo_rirun agent"
+            )

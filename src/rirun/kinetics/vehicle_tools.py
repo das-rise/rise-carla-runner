@@ -1,11 +1,11 @@
 import carla
-from movement import MovementPolicy, PIDMovement, TeleportMovement
-from route_tools import Trajectory
+from kinetics.movement import MovementPolicy, PIDMovement, TeleportMovement
+from kinetics.trajectory import Trajectory
 import logging
 from typing import NamedTuple, Union, Optional
-from stats import Statistic
-from route_tools import get_first_xml_waypoint
-from actor import Actor
+from kinetics.stats import Statistic
+from kinetics.trajectory_utils import get_first_xml_waypoint
+from kinetics.actor import Actor
 
 
 class Vehicle(Actor):

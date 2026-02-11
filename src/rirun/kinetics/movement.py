@@ -1,6 +1,6 @@
-from stats import Statistic
-from actor import Actor
-from PCLA_agents import PCLA_Agent
+from kinetics.stats import Statistic
+from kinetics.actor import Actor
+from PCLA.PCLA_agents import PCLA_Agent
 import math, sys
 from typing import Optional
 import logging

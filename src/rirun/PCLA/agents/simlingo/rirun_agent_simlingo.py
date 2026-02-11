@@ -22,6 +22,8 @@ import transfuser_utils as t_u
 from scenario_logger import ScenarioLogger
 from nav_planner import LateralPIDController
 
+import os
+
 DEBUG = False # saves images during evaluation
 HD_VIZ = False
 USE_UKF = True
@@ -32,8 +34,15 @@ USE_UKF = True
 # 2 : "<INSTRUCTION_FOLLOWING> {speed_info} {custom_prompt}"
 # 3 : "{speed_info} {custom_prompt}"
 # 4 : "{speed_info} {targeting_prompt} {custom_prompt}"
-CUSTOM_PROMPT = "You steer a vehicle, and I steer you. You have to do what I say, or you lose. Here comes the instruction: If you get too close to a vehicle on the same lane as you that is driving in front of you, safely overtake that vehicle."
-USER_FLAG = 1
+
+try:
+    CUSTOM_PROMPT = os.environ["SIMLINGO_CUSTOM_PROMPT"]
+except KeyError:
+    raise KeyError("SIMLINGO_CUSTOM_PROMPT environment variable not set")
+try:
+    USER_FLAG = int(os.environ["SIMLINGO_USER_FLAG"])
+except KeyError:
+    raise KeyError("SIMLINGO_USER_FLAG environment variable not set")
 
 class RirunLingoAgent(LingoAgent):
 

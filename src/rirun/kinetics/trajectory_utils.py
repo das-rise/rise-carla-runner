@@ -1,5 +1,5 @@
 from typing import Tuple, Union
-from kinetics.trajectory import Trajectory, CarlaTrajectoryPoint
+from rirun.kinetics.trajectory import Trajectory, CarlaTrajectoryPoint
 import xml.etree.ElementTree as ET
 import carla
 
@@ -77,7 +77,7 @@ def parse_openlabel_file(
     Parse an OpenLabel file created by SAVANT (https://github.com/RI-SE/SAVANT/tree/main/schema) to extract trajectory files.
 
     Parses the given OpenLabel .json file, optionally between the given frames, 
-    and generates trajectory files files for every vehicle.
+    and generates trajectory files for every vehicle.
 
     Args:
 

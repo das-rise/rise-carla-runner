@@ -10,7 +10,7 @@ import queue
 import threading
 import atexit
 import time
-from kinetics.vehicle_tools import Actor
+from rirun.kinetics.vehicle_tools import Actor
 
 
 class WindowedBirdseyeCamera:

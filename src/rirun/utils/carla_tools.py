@@ -4,7 +4,7 @@ Tools essential for manipulating Carla from the client-side
 
 import carla
 import logging
-from carla_agents.navigation.global_route_planner import GlobalRoutePlanner
+from rirun.carla_agents.navigation.global_route_planner import GlobalRoutePlanner
 
 
 def create_route(

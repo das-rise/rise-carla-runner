@@ -8,17 +8,17 @@ import sys
 import logging
 import subprocess
 import carla
-from kinetics.vehicle_tools import Vehicle
-from kinetics.movement import PCLA_Movement
-from kinetics.trajectory_utils import process_trajectory_file
-from utils.video_tools import StreamingCamera
-from utils.spinner import Spinner
-from utils.bling import rirun
+from rirun.kinetics.vehicle_tools import Vehicle
+from rirun.kinetics.movement import PCLA_Movement
+from rirun.kinetics.trajectory_utils import process_trajectory_file
+from rirun.utils.video_tools import StreamingCamera
+from rirun.utils.spinner import Spinner
+from rirun.utils.bling import rirun
 import math
-from kinetics.stats import Average_Distance_Interpolated
-from PCLA.PCLA_agents import PCLA_Agent, check_agent_env
+from rirun.kinetics.stats import Average_Distance_Interpolated
+from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from traj_convert.carla2traj import Carla2Traj
-from utils.carla_tools import load_map
+from rirun.utils.carla_tools import load_map
 
 # Helper functions
 

@@ -1,7 +1,7 @@
 import carla
 from typing import Tuple, List, Generator, NamedTuple
 from math import sqrt, acos, pi
-import utils.carla_tools
+from rirun.utils import carla_tools
 
 
 class CarlaTrajectoryPoint(NamedTuple):

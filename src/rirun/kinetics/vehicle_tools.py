@@ -1,11 +1,11 @@
 import carla
-from kinetics.movement import MovementPolicy, PIDMovement, TeleportMovement
-from kinetics.trajectory import Trajectory
+from rirun.kinetics.movement import MovementPolicy, PIDMovement, TeleportMovement
+from rirun.kinetics.trajectory import Trajectory
 import logging
 from typing import NamedTuple, Union, Optional
-from kinetics.stats import Statistic
-from kinetics.trajectory_utils import get_first_xml_waypoint
-from kinetics.actor import Actor
+from rirun.kinetics.stats import Statistic
+from rirun.kinetics.trajectory_utils import get_first_xml_waypoint
+from rirun.kinetics.actor import Actor
 
 
 class Vehicle(Actor):
@@ -66,9 +66,13 @@ class Vehicle(Actor):
         # Movement strategy
         if isinstance(movement, MovementPolicy):
             self._mover = movement
-        else:
+        elif isinstance(movement, str):
             self._mover = (
                 PIDMovement() if movement.lower() == "pid" else TeleportMovement()
+            )
+        else:
+            raise ValueError(
+                f"Invalid movement policy type {type(movement)}. Must be MovementPolicy or str."
             )
 
         # Deviation statistic

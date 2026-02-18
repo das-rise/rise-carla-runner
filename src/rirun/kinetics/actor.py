@@ -1,5 +1,5 @@
 import carla
-from route_tools import CarlaTrajectoryPoint
+from rirun.kinetics.trajectory import CarlaTrajectoryPoint
 
 
 class Actor:

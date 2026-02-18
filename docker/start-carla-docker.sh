@@ -50,7 +50,7 @@ if  [ "$ue5" = true ]; then
 else
     # use our custom Dockerfile to include the scenario-runner in the container,
     # will use carla 0.9.15
-    docker build -t carla-synergies-0.9.15 ./docker/ || { echo "Errors during docker build, exiting."; exit 1; }
+    docker build -t carla-synergies-0.9.15 . || { echo "Errors during docker build, exiting."; exit 1; }
     docker run -d --privileged \
 	--gpus=all -p 2000-2002:2000-2002 \
 	carla-synergies-0.9.15 \

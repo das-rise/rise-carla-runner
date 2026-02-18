@@ -1,4 +1,4 @@
-import stats
+import rirun.kinetics.stats as stats
 import carla
 
 # data (Tuple): Reference time (seconds, from raw trajectory), reference location (carla.Location, from raw trajectory), reference_speed (carla.Vector3D km/h, from raw trajectory), simulation time (seconds), simulation location (carla.Location)

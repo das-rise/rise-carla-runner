@@ -154,7 +154,7 @@ class TeleportMovement(MovementPolicy):
             # check if it is time to spawn the actor
             if simulation_time >= curr_traj_time - self._temporal_trigger:
                 logging.info(
-                    f"Initiating vehicle spawn. Simulation time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
+                    f"{actor.name}: trying spawn at sim time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
                 )
                 actor.spawn()
                 return

@@ -118,7 +118,7 @@ def parse_arguments():
         help="Path to XML file containing the route for the PCLA agent (required if --pcla_agent is specified).",
     )
     parser.add_argument(
-        "--offset",
+        "--offset_time",
         type=float,
         default=0.0,
         help="Time offset in seconds to start the simulation at (default: 0.0).",
@@ -189,7 +189,8 @@ def main() -> None:
     trajectories_list = []
     for file in args.trajectory_filepaths:
         try:
-            trajectories_list.append(process_trajectory_file(file))
+            vehicle_name = os.path.basename(file).split(".")[0]
+            trajectories_list.append((process_trajectory_file(file), vehicle_name))
         except Exception as e:
             logging.warning(
                 f"Got exception <<{e}>> upon processing trajectory file {file}. Skipping..."
@@ -198,13 +199,12 @@ def main() -> None:
     # Prepare vehicles on rails and initial speed vectors
     vehicles = []
     start_vectors = []
-    for i, trajectory in enumerate(trajectories_list):
-        car_name = f"car{i + 1}"
+    for trajectory, vehicle_name in trajectories_list:
         statistic = Average_Distance_Interpolated()
         new_vehicle = Vehicle(
             world,
             trajectory,
-            car_name,
+            vehicle_name,
             movement=args.movement,
             deviation_statistics=statistic,
         )
@@ -248,7 +248,7 @@ def main() -> None:
         start_time = world.get_snapshot().timestamp.elapsed_seconds
 
         # Start at t=0 relative to spawn, plus potential offset
-        adjusted_elapsed_sim_seconds = args.offset
+        adjusted_elapsed_sim_seconds = args.offset_time
 
         # step vehicles once to spawn those that spawn at the start
         [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
@@ -256,20 +256,17 @@ def main() -> None:
         ## CAMERA
 
         # Get start location of first trajectory and set camera there
-
         start_of_trajectory = [v for v in vehicles][
             0
         ].first_trajectory_point.transform.location
-        cam_loc = (start_of_trajectory.x, start_of_trajectory.y, 20)
 
         # Start camera
-        camera_output_filename = f"camera_{start_ts}"
         cam = StreamingCamera(
             world,
-            loc=cam_loc,
+            loc=(start_of_trajectory.x, start_of_trajectory.y, 100),
             fps=1 / timestep if timestep else 30,  # fallback for asynchronous mode
             output_dir=args.camera_output_dir,
-            video_name=camera_output_filename,
+            video_name=f"camera_{start_ts}",
             preferred_fourccs=["mp4v"],
             ego_vehicle=(
                 [v for v in vehicles if hasattr(v, "_actor")][0]
@@ -281,12 +278,12 @@ def main() -> None:
         cam.timestamp_offset = -start_time
         cam.start_recording()
 
-        while adjusted_elapsed_sim_seconds < args.simulation_duration + args.offset:
+        while adjusted_elapsed_sim_seconds < args.simulation_duration + args.offset_time:
             world.tick()
             snapshot = world.get_snapshot()
             traj_recorder.process_world_snapshot(snapshot)
             adjusted_elapsed_sim_seconds = (
-                snapshot.timestamp.elapsed_seconds - start_time + args.offset
+                snapshot.timestamp.elapsed_seconds - start_time + args.offset_time
             )
             [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
 
@@ -297,7 +294,7 @@ def main() -> None:
                 )
 
             spinner.update_message(
-                f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset) / args.simulation_duration * 100)}%"
+                f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset_time) / args.simulation_duration * 100)}%"
             )
 
     except Exception as e:
@@ -308,7 +305,7 @@ def main() -> None:
         if spinner is not None:
             spinner.stop()
         logging.info(
-            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset} adjusted elapsed simulation seconds."
+            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset_time} adjusted elapsed simulation seconds."
         )
         cam.stop_recording()
         print(f"Video saved to: {cam.video_path}")

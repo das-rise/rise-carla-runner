@@ -8,17 +8,17 @@ import sys
 import logging
 import subprocess
 import carla
-from vehicle_tools import Vehicle
-from movement import PCLA_Movement
-from route_tools import process_trajectory_file
-from video_tools import StreamingCamera
-from spinner import Spinner
-from bling import rirun
+from rirun.kinetics.vehicle_tools import Vehicle
+from rirun.kinetics.movement import PCLA_Movement
+from rirun.kinetics.trajectory_utils import process_trajectory_file
+from rirun.utils.video_tools import StreamingCamera
+from rirun.utils.spinner import Spinner
+from rirun.utils.bling import rirun
 import math
-from stats import Average_Distance_Interpolated
-from PCLA_agents import PCLA_Agent, check_agent_env
+from rirun.kinetics.stats import Average_Distance_Interpolated
+from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from traj_convert.carla2traj import Carla2Traj
-from carla_tools import load_map
+from rirun.utils.carla_tools import load_map
 
 # Helper functions
 
@@ -175,7 +175,7 @@ def main() -> None:
         settings.fixed_delta_seconds = timestep
     world.apply_settings(settings)
 
-    logging.info(f"{world.get_settings()}")
+    logging.info(f"Carla world settings: \n{world.get_settings()}")
 
     traj_recorder = Carla2Traj(world, debug=False)
 
@@ -231,6 +231,8 @@ def main() -> None:
         )
         vehicles.append(pcla_vehicle)
 
+    logging.info(f"Vehicle list: {','.join([v.name for v in vehicles])}")
+
     success = True
     start_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     try:
@@ -248,7 +250,8 @@ def main() -> None:
         ## CAMERA
 
         # Get start location of first trajectory and set camera there
-        start_of_trajectory = [v for v in vehicles if hasattr(v, "_actor")][
+
+        start_of_trajectory = [v for v in vehicles][
             0
         ].first_trajectory_point.transform.location
         cam_loc = (start_of_trajectory.x, start_of_trajectory.y, 20)

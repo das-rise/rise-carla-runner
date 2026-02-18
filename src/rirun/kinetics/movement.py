@@ -1,13 +1,13 @@
-from stats import Statistic
-from actor import Actor
-from PCLA_agents import PCLA_Agent
+from rirun.kinetics.stats import Statistic
+from rirun.kinetics.actor import Actor
+from rirun.PCLA.PCLA_agents import PCLA_Agent
 import math, sys
 from typing import Optional
 import logging
 import carla
 from pathlib import Path
-from carla_agents.navigation.controller import VehiclePIDController
-from PCLA.PCLA import PCLA
+from rirun.carla_agents.navigation.controller import VehiclePIDController
+from rirun.PCLA.PCLA import PCLA
 
 ###
 

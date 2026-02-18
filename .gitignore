@@ -1,9 +1,6 @@
-__pycache__/*
+__pycache__/
 pretrained.zip
 src/rirun/camera_output/*
-src/rirun/carla_agents/__pycache__/*
-src/rirun/carla_agents/navigation/__pycache__/*
-src/rirun/carla_agents/tools/__pycache__/*
 src/rirun.egg-info/*
 .vscode/*
 output/*

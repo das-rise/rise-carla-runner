@@ -117,6 +117,12 @@ def parse_arguments():
         type=str,
         help="Path to XML file containing the route for the PCLA agent (required if --pcla_agent is specified).",
     )
+    parser.add_argument(
+        "--offset",
+        type=float,
+        default=0.0,
+        help="Time offset in seconds to start the simulation at (default: 0.0).",
+    )
 
     args = parser.parse_args()
 
@@ -241,8 +247,8 @@ def main() -> None:
         # Define t0 at spawn time
         start_time = world.get_snapshot().timestamp.elapsed_seconds
 
-        # Start at t=0 relative to spawn
-        adjusted_elapsed_sim_seconds = 0.0
+        # Start at t=0 relative to spawn, plus potential offset
+        adjusted_elapsed_sim_seconds = args.offset
 
         # step vehicles once to spawn those that spawn at the start
         [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
@@ -275,12 +281,12 @@ def main() -> None:
         cam.timestamp_offset = -start_time
         cam.start_recording()
 
-        while adjusted_elapsed_sim_seconds < args.simulation_duration:
+        while adjusted_elapsed_sim_seconds < args.simulation_duration + args.offset:
             world.tick()
             snapshot = world.get_snapshot()
             traj_recorder.process_world_snapshot(snapshot)
             adjusted_elapsed_sim_seconds = (
-                snapshot.timestamp.elapsed_seconds - start_time
+                snapshot.timestamp.elapsed_seconds - start_time + args.offset
             )
             [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
 
@@ -291,7 +297,7 @@ def main() -> None:
                 )
 
             spinner.update_message(
-                f"Stepping simulation {round(adjusted_elapsed_sim_seconds / args.simulation_duration * 100)}%"
+                f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset) / args.simulation_duration * 100)}%"
             )
 
     except Exception as e:
@@ -302,7 +308,7 @@ def main() -> None:
         if spinner is not None:
             spinner.stop()
         logging.info(
-            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds} adjusted elapsed simulation seconds."
+            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset} adjusted elapsed simulation seconds."
         )
         cam.stop_recording()
         print(f"Video saved to: {cam.video_path}")

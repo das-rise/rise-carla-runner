@@ -191,7 +191,7 @@ class TeleportMovement(MovementPolicy):
             try:
                 actor.advance_trajectory()
             except StopIteration:
-                logging.info(f"{actor.name} Reached end of trajectory")
+                logging.info(f"{actor.name} Reached end of trajectory at simulation time {simulation_time}")
                 actor.destroy()
                 self._traversed_trajectory = True
                 return

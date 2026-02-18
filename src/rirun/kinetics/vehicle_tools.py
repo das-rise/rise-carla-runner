@@ -164,8 +164,10 @@ class Vehicle(Actor):
             z_min (float): Minimum valid z-coordinate value in meters. Defaults to -1.
         """
 
-        if self.is_spawned():
+        if self._spawned:
             current_position = self.get_actor().get_transform().location
             return current_position.z >= z_min
+        elif self._destroyed:
+            return True  # If the vehicle is destroyed, we consider the z-coordinate to be valid by default.
         else:
             return True  # If the vehicle is not spawned, we consider the z-coordinate to be valid by default.

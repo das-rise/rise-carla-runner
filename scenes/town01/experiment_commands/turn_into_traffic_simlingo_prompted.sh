@@ -8,7 +8,7 @@ python src/rirun/run.py \
     --timestep 0.0333333333333333333 \
     --pcla_agent simlingo_rirun \
     --pcla_route scenes/town01/agent_routes/agent_turn.xml \
-    --ego_camera
+    --camera_mode ego
 
 unset SIMLINGO_CUSTOM_PROMPT
 unset SIMLINGO_USER_FLAG

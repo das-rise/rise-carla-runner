@@ -3,12 +3,12 @@
 In this directory, we will collect an OpenDrive file
 together with scripts to follow waypoints within the map,
 as well as scripts for one or more simple agent(s) that follow(s)
- such waypoints.
+such waypoints.
 
 # Example run
 
 ```bash
-python run.py 15 PCLA-Town01/Town01.xodr PCLA-Town01/vehicle1_route.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route PCLA-Town01/agent_route.xml --ego_camera
+python run.py 15 PCLA-Town01/Town01.xodr PCLA-Town01/vehicle1_route.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route PCLA-Town01/agent_route.xml --camera_mode ego
 ```
 
 will use the `PCLA` agent `NEAT_AIM2DDEPTH`, primed to follow the route in PCLA-Town01/agent_route.xml, with the camera attached to the `ego_vehicle`.

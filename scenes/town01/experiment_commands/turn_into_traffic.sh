@@ -6,4 +6,4 @@ python src/rirun/run.py \
     --timestep 0.0333333333333333333 \
     --pcla_agent neat_aim2dsem \
     --pcla_route scenes/town01/agent_routes/agent_turn.xml \
-    --ego_camera
+    --camera_mode ego

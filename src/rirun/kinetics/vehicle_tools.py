@@ -102,7 +102,7 @@ class Vehicle(Actor):
         self._actor = self._world.spawn_actor(self._blueprint, transform)
         self._mover.on_spawn(self)
         logging.info(
-            f"Spawned vehicle {self.name} at {transform} and attached movement policy {self._mover.__class__.__name__}"
+            f"Spawned vehicle {self.name} at {transform} [{self._mover.__class__.__name__}]"
         )
         self._spawned = True
 
@@ -113,9 +113,15 @@ class Vehicle(Actor):
         assert self._actor.destroy(), f"Could not destroy Vehicle {self.name}."
         self._destroyed = True
         if self._deviation_statistics is not None:
-            logging.info(
-                f"Deviation statistics for {self.name} with statistic {self._deviation_statistics.__class__.__name__}: {self._deviation_statistics.evaluate()}"
-            )
+            try:
+                logging.info(
+                    f"Deviation statistics for {self.name} with statistic {self._deviation_statistics.__class__.__name__}: {self._deviation_statistics.evaluate()}"
+                )
+            except Exception as e:
+                logging.error(
+                    f"Error evaluating deviation statistics for {self.name}: {e}"
+                )
+            
 
     def kick(self, vec=carla.Vector3D(10, 10, 0)) -> None:
         """

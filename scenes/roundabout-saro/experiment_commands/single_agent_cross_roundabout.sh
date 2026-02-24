@@ -7,4 +7,4 @@ python src/rirun/run.py \
   --timestep 0.0333333333333333333 \
   --pcla_agent tfpp_wp_1 \
   --pcla_route scenes/roundabout-saro/agent_routes/across_big_roundabout.xml \
-  --ego_camera
+  --camera_mode ego

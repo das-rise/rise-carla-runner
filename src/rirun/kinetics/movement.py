@@ -42,7 +42,10 @@ class PIDMovement(MovementPolicy):
         max_brake: float = 0.3,
         max_steering: float = 0.8,
         dt: float = 1.0 / 20.0,
+        temporal_trigger: float = 0.01,
     ) -> None:
+        
+        # Setup PID controller parameters, use defaults if not provided
         lateral_default = {"K_P": 1.95, "K_I": 0.05, "K_D": 0.2, "dt": dt}
         longitudinal_default = {"K_P": 1.0, "K_I": 0.05, "K_D": 0, "dt": dt}
         self.lateral = lateral_dict or lateral_default
@@ -51,6 +54,9 @@ class PIDMovement(MovementPolicy):
         self.max_brake = max_brake
         self.max_steering = max_steering
         self._controller = None
+
+        self._traversed_trajectory = False
+        self._temporal_trigger = temporal_trigger
 
     def on_spawn(self, vehicle: Actor) -> None:
         self._controller = VehiclePIDController(
@@ -80,33 +86,72 @@ class PIDMovement(MovementPolicy):
                   False otherwise.
         """
 
-        raise NotImplementedError
-
         """
         What needs to be done here: Take care of the spawn logic, give vehicles an initial kick 
         to come to the target speed, and take care of destroying the vehicle
         """
 
-        while True:
-            dist_to_waypoint = (
-                actor.get_actor()
-                .get_location()
-                .distance(actor.get_current_trajectory_point().transform.location)
-            )
-            if dist_to_waypoint < self.MIN_DIST_TO_WAYPOINT:
-                try:
-                    actor.advance_trajectory()
-                except StopIteration:
-                    logging.info(f"{actor.name} Reached end of trajectory")
-                    return
-            else:
-                break
 
-        control = self._controller.run_step(
-            actor.get_current_trajectory_point().speed,
-            actor.get_current_trajectory_point(),
-        )
-        actor.get_actor().apply_control(control)
+        curr_traj_time = actor.get_current_trajectory_point().time
+        curr_traj_trafo = actor.get_current_trajectory_point().transform
+        curr_traj_speed = actor.get_current_trajectory_point().speed
+
+        if not actor.is_spawned():
+            # check if it is time to spawn the actor
+            if simulation_time >= curr_traj_time - self._temporal_trigger:
+                logging.info(
+                    f"{actor.name}: trying spawn at sim time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
+                )
+                actor.spawn()
+                speed_vector = curr_traj_trafo.get_forward_vector() * (float(curr_traj_speed) / 3.6)
+                actor.kick(speed_vector)
+                return
+
+        elif self._traversed_trajectory:
+            # return immediately if whole trajectory has been traversed
+            return
+        
+        else:
+            while True:
+                dist_to_waypoint = (
+                    actor.get_actor()
+                    .get_location()
+                    .distance(curr_traj_trafo.location)
+                )
+                if dist_to_waypoint < self.MIN_DIST_TO_WAYPOINT:
+                    try:
+                        actor.advance_trajectory()
+                        curr_traj_time = actor.get_current_trajectory_point().time
+                        curr_traj_trafo = actor.get_current_trajectory_point().transform
+                        curr_traj_speed = actor.get_current_trajectory_point().speed
+                        # logging.info(f"{actor.name} reached waypoint at {curr_traj_trafo.location}, advancing to next waypoint")
+                    except StopIteration:
+                        logging.info(f"{actor.name}: reached end of trajectory at sim time {simulation_time}")
+                        actor.destroy()
+                        self._traversed_trajectory = True
+                        return
+                else:
+                    break
+
+            if deviation_statistics is not None:
+                speed_vector = actor.get_actor().get_velocity()
+                deviation_statistics.add(
+                    (
+                        curr_traj_time,
+                        curr_traj_trafo.location,
+                        speed_vector,
+                        simulation_time,
+                        curr_traj_trafo.location,
+                    )
+                )
+
+            control = self._controller.run_step(
+                actor.get_current_trajectory_point().speed,
+                actor.get_current_trajectory_point(),
+            )
+
+            actor.get_actor().apply_control(control)
+
 
 
 class TeleportMovement(MovementPolicy):
@@ -191,7 +236,7 @@ class TeleportMovement(MovementPolicy):
             try:
                 actor.advance_trajectory()
             except StopIteration:
-                logging.info(f"{actor.name} Reached end of trajectory at simulation time {simulation_time}")
+                logging.info(f"{actor.name}: reached end of trajectory at sim time {simulation_time}")
                 actor.destroy()
                 self._traversed_trajectory = True
                 return

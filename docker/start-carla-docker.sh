@@ -36,9 +36,21 @@ done
 containerid=$(docker ps | grep carla | awk ' { print $1 } ')
 if ! [[ -z "$containerid" ]]; then
     trap 'echo; echo "Exiting."; exit 130' INT
-    printf "Found running Carla container: %s. Try starting another one? [enter or Ctrl+C] " "$containerid"
-    read -s -r  # -s = silent, input is not echoed
-    echo    # add newline
+    printf "Found running Carla container(s): %s\n" "$containerid"
+    read -p "Choose: [k]ill existing and start new, [s]tart another, or [e]xit? [k/s/e]: " response
+    case $response in
+        [kK]*)
+            docker kill $containerid > /dev/null 2>&1
+            echo "Existing container(s) killed."
+            ;;
+        [eE]*)
+            echo "Exiting."
+            exit 0
+            ;;
+        *)
+            echo "Starting new container..."
+            ;;
+    esac
 fi
 
 if  [ "$ue5" = true ]; then
@@ -50,7 +62,7 @@ if  [ "$ue5" = true ]; then
 else
     # use our custom Dockerfile to include the scenario-runner in the container,
     # will use carla 0.9.15
-    docker build -t carla-synergies-0.9.15 . || { echo "Errors during docker build, exiting."; exit 1; }
+    docker build -t carla-synergies-0.9.15 -f "$(dirname "$0")/Dockerfile" "$(dirname "$0")" || { echo "Errors during docker build, exiting."; exit 1; }
     docker run -d --privileged \
 	--gpus=all -p 2000-2002:2000-2002 \
 	carla-synergies-0.9.15 \

@@ -330,6 +330,10 @@ def main() -> None:
         cam.stop_recording()
         print(f"Video saved to: {cam.video_path}")
         traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
+
+        # Destroy all remaining active vehicles
+        [v.destroy() for v in active_vehicles]
+
         if success:
             logging.info("Simulation completed successfully.")
             quit(0)

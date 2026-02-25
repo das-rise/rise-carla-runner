@@ -193,9 +193,9 @@ def main() -> None:
         timestep = args.timestep if args.timestep else 0.01
         settings.fixed_delta_seconds = timestep
         # fixed_delta_seconds <= max_substep_delta_time * max_substeps
-        max_substeps = 20
+        max_substeps = 10
         settings.max_substeps = max_substeps
-        settings.max_substep_delta_time = timestep / max_substeps
+        settings.max_substep_delta_time = timestep / ( max_substeps - 1 )
     world.apply_settings(settings)
 
     logging.info(f"Carla world settings: \n{world.get_settings()}")

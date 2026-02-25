@@ -42,7 +42,7 @@ class Average_Distance_True(Statistic):
         Args:
             data (Tuple): Either (CarlaTrajectoryPoint) or (CurrentTransform, sim_time)
         """
-        if data.isinstance(CarlaTrajectoryPoint):
+        if isinstance(data, CarlaTrajectoryPoint):
             loc = data.transform.location
             sim_time = data.time
             self._reference_trajectory.append((loc, sim_time))

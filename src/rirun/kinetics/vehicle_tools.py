@@ -3,7 +3,7 @@ from rirun.kinetics.movement import MovementPolicy, PIDMovement, TeleportMovemen
 from rirun.kinetics.trajectory import Trajectory
 import logging
 from typing import NamedTuple, Union, Optional
-from rirun.kinetics.stats import Statistic
+from rirun.kinetics.stats import Average_Distance_True
 from rirun.kinetics.trajectory_utils import get_first_xml_waypoint
 from rirun.kinetics.actor import Actor
 
@@ -20,7 +20,7 @@ class Vehicle(Actor):
         name: str,
         movement: Union[str, MovementPolicy] = "pid",
         blueprint: str = "model3",
-        deviation_statistics: Optional[Statistic] = None,
+        deviation_statistics: Optional[str] = None,
     ) -> None:
         """
         Initialize an actor with a specified trajectory, movement policy, and vehicle blueprint.
@@ -42,8 +42,10 @@ class Vehicle(Actor):
                 control, or any other string to fall back to teleportation-based movement.
             blueprint (str, optional):
                 The vehicle blueprint to spawn, e.g., `"model3"`. Defaults to `"model3"`.
-            deviation_statistics (Optional[Statistic], optional):
-                An object to collect deviation metrics during the actor's run.
+            deviation_statistics (Optional[str], optional):
+                Which trajectory deviation statistics to compute during the run. Can be:
+                - `"average_distance_interpolated"`: computes the average distance between the reference and interpolated position for all timestamps in a trajectory.
+                - `"average_distance_true"`: computes the average distance between the reference and true position for all timestamps in a trajectory.
                 Defaults to `None`.
         """
 
@@ -76,7 +78,14 @@ class Vehicle(Actor):
             )
 
         # Deviation statistic
-        self._deviation_statistics = deviation_statistics
+        if deviation_statistics is None:
+            self._deviation_statistics = None
+        elif deviation_statistics == "average_distance_interpolated":
+            self._deviation_statistics
+        elif deviation_statistics == "average_distance_true":
+            self._deviation_statistics = Average_Distance_True()
+        else:
+            raise ValueError(f"Invalid statistic name: {deviation_statistics}")
 
         self._spawned = False
         self._destroyed = False
@@ -121,7 +130,6 @@ class Vehicle(Actor):
                 logging.error(
                     f"Error evaluating deviation statistics for {self.name}: {e}"
                 )
-            
 
     def kick(self, vec=carla.Vector3D(10, 10, 0)) -> None:
         """

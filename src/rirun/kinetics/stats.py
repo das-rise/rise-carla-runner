@@ -9,13 +9,13 @@ Classes:
     Average_Distance_Interpolated: Calculates average positional accuracy
 """
 
-import carla
-from typing import Tuple
+from rirun.kinetics.trajectory import CarlaTrajectoryPoint
+
 
 class Statistic:
     """Interface to keep track of vehicular dynamic statistics"""
 
-    def add(self, data=Tuple) -> None:
+    def add(self, data) -> None:
         """Add data to the statistic."""
         return
 
@@ -23,71 +23,53 @@ class Statistic:
         """Produce the result of the statistic."""
 
 
-class Average_Distance_Interpolated(Statistic):
+class Average_Distance_True(Statistic):
     """
-    Calculate the average distance between the reference and interpolated position
-    for all timestamps in a trajectory.
+    Calculate the average distance between the reference and true position in a trajectory.
+
+    This is done by comparing the position of the vehicle at each tick with the reference position at the same timestamp.
+    The reference position is obtained from the raw trajectory, while the true position is obtained from the simulation measurements.
     """
 
     def __init__(self) -> None:
-        self._data = []
+        self._reference_trajectory = []
+        self._measurements = []
 
-    def add(self, data=Tuple) -> None:
+    def add(self, data) -> None:
         """
         Add a point to the statistic.
 
         Args:
-            data (Tuple): Reference time (seconds, from raw trajectory), reference location (carla.Location, from raw trajectory), reference_speed (carla.Vector3D km/h, from raw trajectory), simulation time (seconds), simulation location (carla.Location)
+            data (Tuple): Either (CarlaTrajectoryPoint) or (CurrentTransform, sim_time)
         """
-        self._data.append(data)
+        if data.isinstance(CarlaTrajectoryPoint):
+            loc = data.transform.location
+            sim_time = data.time
+            self._reference_trajectory.append((loc, sim_time))
+        elif len(data) == 2:
+            loc = data[0].location
+            sim_time = data[1]
+            self._measurements.append((loc, sim_time))
+        else:
+            raise ValueError(
+                f"Invalid data format for Average_Distance_True statistic. Expected either (CarlaTrajectoryPoint) or (CurrentTransform, sim_time), got {data}"
+            )
 
     def evaluate(self) -> float:
         """Produce the average distance.
 
         Returns:
             float: The average Euclidean distance between the reference locations
-                   and their corresponding interpolated locations across all timestamps.
+                   and their corresponding true locations across all timestamps.
         """
+
         distances = []
-        for (
-            reference_time,
-            reference_location,
-            reference_speed,
-            sim_time,
-            sim_location,
-        ) in self._data:
-            interpolated_location = self.interpolate_location(
-                reference_time, reference_speed, sim_time, sim_location
+        for measurement_loc, measurement_time in self._measurements:
+            # find the reference location with the closest timestamp to the measurement
+            closest_reference = min(
+                self._reference_trajectory,
+                key=lambda ref: abs(ref[1] - measurement_time),
             )
-            distances.append(interpolated_location.distance(reference_location))
+            distances.append(measurement_loc.distance(closest_reference[0]))
 
         return sum(distances) / len(distances)
-
-    def interpolate_location(
-        self,
-        reference_time: float,
-        reference_speed: carla.Vector3D,
-        sim_time: float,
-        sim_location: carla.Location,
-    ) -> carla.Location:
-        """
-        Interpolate the location at the reference time (seconds) using the simulation time (seconds),
-        simulation location (meters) and simulation speed (in km/h).
-
-        Args:
-            reference_time (float): The reference timestamp in seconds.
-            reference_speed (carla.Vector3D): The reference speed vector in km/h.
-            sim_time (float): The simulation timestamp in seconds.
-            sim_location (carla.Location): The location at the simulation time in meters.
-
-        Returns:
-            carla.Location: The interpolated location in meters.
-        """
-        time_factor = (
-            reference_time - sim_time
-        ) / 3.6  # time_factor includes km/h to m/s conversion
-        x_interpolated = sim_location.x + time_factor * reference_speed.x
-        y_interpolated = sim_location.y + time_factor * reference_speed.y
-        z_interpolated = sim_location.z + time_factor * reference_speed.z
-
-        return carla.Location(x_interpolated, y_interpolated, z_interpolated)

@@ -15,7 +15,6 @@ from rirun.utils.video_tools import StreamingCamera
 from rirun.utils.spinner import Spinner
 from rirun.utils.bling import rirun
 import math
-from rirun.kinetics.stats import Average_Distance_Interpolated
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from traj_convert.carla2traj import Carla2Traj
 from rirun.utils.carla_tools import load_map
@@ -127,6 +126,12 @@ def parse_arguments():
         default=0.0,
         help="Time offset in seconds to start the simulation at (default: 0.0).",
     )
+    parser.add_argument(
+        "--trajectory_statistics",
+        type=str,
+        choices=["average_distance_true"],
+        help="Choice of trajectory deviation statistics to compute during the run.",
+    )
 
     args = parser.parse_args()
 
@@ -213,13 +218,12 @@ def main() -> None:
     vehicles = []
     start_vectors = []
     for trajectory, vehicle_name in trajectories_list:
-        statistic = Average_Distance_Interpolated()
         new_vehicle = Vehicle(
             world,
             trajectory,
             vehicle_name,
             movement=args.movement,
-            deviation_statistics=statistic,
+            deviation_statistics=args.trajectory_statistics,
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (

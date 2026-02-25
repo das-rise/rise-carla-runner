@@ -294,10 +294,12 @@ def main() -> None:
         cam.timestamp_offset = -start_time
         cam.start_recording()
 
+        num_ticks = 0
         while (
             adjusted_elapsed_sim_seconds < args.simulation_duration + args.offset_time
         ):
             world.tick()
+            num_ticks += 1
             snapshot = world.get_snapshot()
             traj_recorder.process_world_snapshot(snapshot)
             adjusted_elapsed_sim_seconds = (
@@ -315,11 +317,11 @@ def main() -> None:
                         f"Vehicle {v.name} has invalid z-coordinate at sim time {adjusted_elapsed_sim_seconds}. "
                         f"Current z: {v.get_actor().get_transform().location.z}"
                     )
-
-            spinner.update_message(
-                f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset_time) / args.simulation_duration * 100)}%. "
-                f"#active 🚗: {len(active_vehicles)}"
-            )
+            if num_ticks % 30 == 0:
+                spinner.update_message(
+                    f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset_time) / args.simulation_duration * 100)}%; "
+                    f"#active 🚗: {len(active_vehicles)}; ticks: {num_ticks}"
+                )
 
     except Exception as e:
         logging.error(f"Exception! --> {e}", exc_info=True)
@@ -329,11 +331,15 @@ def main() -> None:
         if spinner is not None:
             spinner.stop()
         logging.info(
-            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset_time} adjusted elapsed simulation seconds."
+            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset_time} "
+            f"adjusted elapsed simulation seconds. Total ticks: {num_ticks}"
         )
-        cam.stop_recording()
-        print(f"Video saved to: {cam.video_path}")
+        spinner.update_message("Saving outputs...")
+        spinner.start()
+        cam.stop_recording(num_ticks)  # ensure all frames are flushed to disk before proceeding
         traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
+
+        spinner.stop()
 
         # Destroy all remaining active vehicles
         [v.destroy() for v in active_vehicles]

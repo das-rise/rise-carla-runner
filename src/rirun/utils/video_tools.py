@@ -374,12 +374,15 @@ class StreamingCamera:
             f"queue_max={self._queue.maxsize}"
         )
 
-    def stop_recording(self) -> None:
+    def stop_recording(self, wait_until_num_captured: int = 0) -> None:
         """Stop recording and flush remaining frames to the video file."""
         if not self._is_recording:
             return
 
         logging.info("Stopping streaming recorder...")
+        while self._captured < wait_until_num_captured:
+            time.sleep(1)
+
         self._is_recording = False
 
         # 1) Stop CARLA sensor first — prevents any further Python callbacks
@@ -412,7 +415,7 @@ class StreamingCamera:
                 self._writer_thread = None
 
         logging.info(
-            f"Stopped. Captured: {self._captured}, written: {self._written}, dropped: {self._dropped}. "
+            f"Stopped streaming recorder. Captured: {self._captured}, written: {self._written}, dropped: {self._dropped}. "
             f"Video: {self._video_path}"
         )
 

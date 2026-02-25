@@ -152,8 +152,8 @@ class Vehicle(Actor):
 
     def get_xml_route(self) -> str:
         return self._xml_path
-    
-    def has_valid_z(self, z_min = -1) -> bool:
+
+    def has_valid_z(self, z_min=-1) -> bool:
         """
         Check whether the z-coordinate of the vehicle's current trajectory point is valid .
 
@@ -163,6 +163,11 @@ class Vehicle(Actor):
         Args:
             z_min (float): Minimum valid z-coordinate value in meters. Defaults to -1.
         """
-        
-        current_position = self.get_actor().get_transform().location
-        return current_position.z >= z_min
+
+        if self._destroyed:
+            return True  # If the vehicle is destroyed, we consider the z-coordinate to be valid by default.
+        if self._spawned:
+            current_position = self.get_actor().get_transform().location
+            return current_position.z >= z_min
+        else:
+            return True  # If the vehicle is not spawned, we consider the z-coordinate to be valid by default.

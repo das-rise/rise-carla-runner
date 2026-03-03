@@ -92,7 +92,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--movement",
-        choices=["pid", "teleport"],
+        choices=["pid", "pid_ts", "teleport"],
         default="teleport",
         help="How vehicles move along trajectories (default: teleport).",
     )

@@ -1,5 +1,10 @@
 import carla
-from rirun.kinetics.movement import MovementPolicy, PIDMovement, TeleportMovement
+from rirun.kinetics.movement import (
+    MovementPolicy,
+    PIDMovement,
+    PIDMovementTimestampAdvanced,
+    TeleportMovement,
+)
 from rirun.kinetics.trajectory import Trajectory
 import logging
 from typing import NamedTuple, Union, Optional
@@ -69,9 +74,16 @@ class Vehicle(Actor):
         if isinstance(movement, MovementPolicy):
             self._mover = movement
         elif isinstance(movement, str):
-            self._mover = (
-                PIDMovement() if movement.lower() == "pid" else TeleportMovement()
-            )
+            if movement.lower() == "pid":
+                self._mover = PIDMovement()
+            elif movement.lower() == "pid_ts":
+                self._mover = PIDMovementTimestampAdvanced()
+            elif movement.lower() == "teleport":
+                self._mover = TeleportMovement()
+            else:
+                raise ValueError(
+                    f"Invalid movement policy string: {movement}. Must be 'pid', 'pid_ts', or 'teleport'."
+                )
         else:
             raise ValueError(
                 f"Invalid movement policy type {type(movement)}. Must be MovementPolicy or str."

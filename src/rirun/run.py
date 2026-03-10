@@ -15,7 +15,6 @@ from rirun.utils.video_tools import StreamingCamera
 from rirun.utils.spinner import Spinner
 from rirun.utils.bling import rirun
 import math
-from rirun.kinetics.stats import Average_Distance_Interpolated
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from traj_convert.carla2traj import Carla2Traj
 from rirun.utils.carla_tools import load_map
@@ -77,16 +76,10 @@ def parse_arguments():
         help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
     )
     parser.add_argument(
-        "--camera_output_dir",
+        "--output_dir",
         type=str,
-        default="output/camera",
-        help="Where to store the output files. Default: output/camera",
-    )
-    parser.add_argument(
-        "--traj_output_dir",
-        type=str,
-        default="output/traj",
-        help="Where to store the output files. Default: output/traj",
+        default="output",
+        help="Where to store output files. Default: output",
     )
     parser.add_argument(
         "--timestep", type=float, help="Set time step in seconds. Default: 0.01"
@@ -99,7 +92,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--movement",
-        choices=["pid", "teleport"],
+        choices=["pid", "pid_ts", "teleport"],
         default="teleport",
         help="How vehicles move along trajectories (default: teleport).",
     )
@@ -132,6 +125,12 @@ def parse_arguments():
         type=float,
         default=0.0,
         help="Time offset in seconds to start the simulation at (default: 0.0).",
+    )
+    parser.add_argument(
+        "--trajectory_statistics",
+        type=str,
+        choices=["average_distance_true"],
+        help="Choice of trajectory deviation statistics to compute during the run.",
     )
 
     args = parser.parse_args()
@@ -169,12 +168,16 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s [%(levelname)s] - %(message)s"
     )
 
+    # Setup output directories
+    os.makedirs(args.output_dir + "/camera", exist_ok=True)
+    os.makedirs(args.output_dir + "/traj", exist_ok=True)
+
     # Connect to Carla server
     client = carla.Client(carla_host, carla_ip)
     load_map(client, args.map_filepath)
     world = client.reload_world()
-    # Wait until the map is fully loaded
 
+    # Wait until the map is fully loaded
     timeout = 10.0  # seconds
     start_time = time.time()
     while world.get_map() is None:
@@ -189,10 +192,15 @@ def main() -> None:
         settings.synchronous_mode = True
         timestep = args.timestep if args.timestep else 0.01
         settings.fixed_delta_seconds = timestep
+        # fixed_delta_seconds <= max_substep_delta_time * max_substeps
+        max_substeps = 10
+        settings.max_substeps = max_substeps
+        settings.max_substep_delta_time = timestep / ( max_substeps - 1 )
     world.apply_settings(settings)
 
     logging.info(f"Carla world settings: \n{world.get_settings()}")
 
+    # Setup trajectory recorder
     traj_recorder = Carla2Traj(world, debug=False)
 
     # Process trajectories to convert them to Carla format and add speed and heading info
@@ -210,13 +218,12 @@ def main() -> None:
     vehicles = []
     start_vectors = []
     for trajectory, vehicle_name in trajectories_list:
-        statistic = Average_Distance_Interpolated()
         new_vehicle = Vehicle(
             world,
             trajectory,
             vehicle_name,
             movement=args.movement,
-            deviation_statistics=statistic,
+            deviation_statistics=args.trajectory_statistics,
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (
@@ -274,7 +281,7 @@ def main() -> None:
                 else (0, 0, 50)
             ),
             fps=1 / timestep if timestep else 30,  # fallback for asynchronous mode
-            output_dir=args.camera_output_dir,
+            output_dir=args.output_dir + "/camera",
             video_name=f"camera_{start_ts}",
             preferred_fourccs=["mp4v"],
             ego_vehicle=(
@@ -287,26 +294,34 @@ def main() -> None:
         cam.timestamp_offset = -start_time
         cam.start_recording()
 
+        num_ticks = 0
         while (
             adjusted_elapsed_sim_seconds < args.simulation_duration + args.offset_time
         ):
             world.tick()
+            num_ticks += 1
             snapshot = world.get_snapshot()
             traj_recorder.process_world_snapshot(snapshot)
             adjusted_elapsed_sim_seconds = (
                 snapshot.timestamp.elapsed_seconds - start_time + args.offset_time
             )
             [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
+            active_vehicles = [
+                v for v in vehicles if not v._destroyed and v.is_spawned()
+            ]
 
             # check if any vehicle has fallen off the road
-            if not all([v.has_valid_z() for v in vehicles]):
-                raise Exception(
-                    "A vehicle has fallen off the road. Aborting simulation."
+            for v in vehicles:
+                if not v.has_valid_z():
+                    raise Exception(
+                        f"Vehicle {v.name} has invalid z-coordinate at sim time {adjusted_elapsed_sim_seconds}. "
+                        f"Current z: {v.get_actor().get_transform().location.z}"
+                    )
+            if num_ticks % 30 == 0:
+                spinner.update_message(
+                    f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset_time) / args.simulation_duration * 100)}%; "
+                    f"#active 🚗: {len(active_vehicles)}; ticks: {num_ticks}"
                 )
-
-            spinner.update_message(
-                f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset_time) / args.simulation_duration * 100)}%"
-            )
 
     except Exception as e:
         logging.error(f"Exception! --> {e}", exc_info=True)
@@ -316,15 +331,19 @@ def main() -> None:
         if spinner is not None:
             spinner.stop()
         logging.info(
-            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset_time} adjusted elapsed simulation seconds."
+            f"Client: Stopped sending `ticks` after {adjusted_elapsed_sim_seconds - args.offset_time} "
+            f"adjusted elapsed simulation seconds. Total ticks: {num_ticks}"
         )
-        cam.stop_recording()
-        print(f"Video saved to: {cam.video_path}")
-        traj_output_filepath = os.path.join(
-            args.traj_output_dir, f"traj_{start_ts}.parquet"
-        )
-        os.makedirs(os.path.dirname(traj_output_filepath), exist_ok=True)
-        traj_recorder.save(traj_output_filepath)
+        spinner.update_message("Saving outputs...")
+        spinner.start()
+        cam.stop_recording(num_ticks)  # ensure all frames are flushed to disk before proceeding
+        traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
+
+        spinner.stop()
+
+        # Destroy all remaining active vehicles
+        [v.destroy() for v in active_vehicles]
+
         if success:
             logging.info("Simulation completed successfully.")
             quit(0)

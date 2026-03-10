@@ -1,13 +1,13 @@
 from rirun.kinetics.stats import Statistic
 from rirun.kinetics.actor import Actor
 from rirun.PCLA.PCLA_agents import PCLA_Agent
-import math, sys
+import math
 from typing import Optional
 import logging
 import carla
-from pathlib import Path
 from rirun.carla_agents.navigation.controller import VehiclePIDController
 from rirun.PCLA.PCLA import PCLA
+from rirun.kinetics.trajectory import CarlaTrajectoryPoint
 
 ###
 
@@ -42,7 +42,10 @@ class PIDMovement(MovementPolicy):
         max_brake: float = 0.3,
         max_steering: float = 0.8,
         dt: float = 1.0 / 20.0,
+        temporal_trigger: float = 0.01,
     ) -> None:
+
+        # Setup PID controller parameters, use defaults if not provided
         lateral_default = {"K_P": 1.95, "K_I": 0.05, "K_D": 0.2, "dt": dt}
         longitudinal_default = {"K_P": 1.0, "K_I": 0.05, "K_D": 0, "dt": dt}
         self.lateral = lateral_dict or lateral_default
@@ -51,6 +54,9 @@ class PIDMovement(MovementPolicy):
         self.max_brake = max_brake
         self.max_steering = max_steering
         self._controller = None
+
+        self._traversed_trajectory = False
+        self._temporal_trigger = temporal_trigger
 
     def on_spawn(self, vehicle: Actor) -> None:
         self._controller = VehiclePIDController(
@@ -74,39 +80,184 @@ class PIDMovement(MovementPolicy):
             vehicle (Vehicle): The Vehicle to move.
             target_point: The target trajectory point to move towards.
             simulation_time: The current time in the simulation.
-
-        Returns:
-            bool: True if the vehicle has reached the target point and it can be cleared,
-                  False otherwise.
         """
 
-        raise NotImplementedError
-
-        """
-        What needs to be done here: Take care of the spawn logic, give vehicles an initial kick 
-        to come to the target speed, and take care of destroying the vehicle
-        """
-
-        while True:
-            dist_to_waypoint = (
-                actor.get_actor()
-                .get_location()
-                .distance(actor.get_current_trajectory_point().transform.location)
+        if (
+            deviation_statistics is not None
+            and deviation_statistics.__class__.__name__ != "Average_Distance_True"
+        ):
+            raise Exception(
+                "Only Average_Distance_True statistic is currently supported for PIDMovement. "
+                f"Provided statistic: {deviation_statistics.__class__.__name__}"
             )
-            if dist_to_waypoint < self.MIN_DIST_TO_WAYPOINT:
+
+        def _pass_point_to_stats(point: CarlaTrajectoryPoint) -> None:
+            # feed the actual trajectory point to the statistics
+            if deviation_statistics is not None:
+                deviation_statistics.add(point)
+
+        curr_traj_time = actor.get_current_trajectory_point().time
+        curr_traj_trafo = actor.get_current_trajectory_point().transform
+        curr_traj_speed = actor.get_current_trajectory_point().speed
+
+        if not actor.is_spawned():
+            # check if it is time to spawn the actor
+            if simulation_time >= curr_traj_time - self._temporal_trigger:
+                logging.info(
+                    f"{actor.name}: trying spawn at sim time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
+                )
+                actor.spawn()
+                # bring actor up to starting speed
+                speed_vector = curr_traj_trafo.get_forward_vector() * (
+                    float(curr_traj_speed) / 3.6
+                )
+                actor.kick(speed_vector)
+                _pass_point_to_stats(actor.get_current_trajectory_point())
+                return
+
+        elif self._traversed_trajectory:
+            # return immediately if whole trajectory has been traversed
+            return
+
+        else:
+            while True:
+                dist_to_waypoint = (
+                    actor.get_actor().get_location().distance(curr_traj_trafo.location)
+                )
+                if dist_to_waypoint < self.MIN_DIST_TO_WAYPOINT:
+                    try:
+                        actor.advance_trajectory()
+                        curr_traj_time = actor.get_current_trajectory_point().time
+                        curr_traj_trafo = actor.get_current_trajectory_point().transform
+                        curr_traj_speed = actor.get_current_trajectory_point().speed
+                        _pass_point_to_stats(actor.get_current_trajectory_point())
+                    except StopIteration:
+                        logging.info(
+                            f"{actor.name}: reached end of trajectory at sim time {simulation_time}"
+                        )
+                        actor.destroy()
+                        self._traversed_trajectory = True
+                        return
+                else:
+                    break
+
+            # perform a measurement by passing the vehicles current location
+            if deviation_statistics is not None:
+                deviation_statistics.add(
+                    (actor.get_actor().get_transform(), simulation_time)
+                )
+
+            control = self._controller.run_step(
+                actor.get_current_trajectory_point().speed,
+                actor.get_current_trajectory_point(),
+            )
+
+            actor.get_actor().apply_control(control)
+
+
+class PIDMovementTimestampAdvanced(PIDMovement):
+    """PID movement that advances trajectory based on timestamps
+    instead of distance to waypoint."""
+
+    def __init__(
+        self,
+        lateral_dict: dict = None,
+        longitudinal_dict: dict = None,
+        max_throttle: float = 0.75,
+        max_brake: float = 0.3,
+        max_steering: float = 0.8,
+        dt: float = 1.0 / 20.0,
+        temporal_trigger: float = 0.01,
+    ) -> None:
+        super().__init__(
+            lateral_dict,
+            longitudinal_dict,
+            max_throttle,
+            max_brake,
+            max_steering,
+            dt,
+            temporal_trigger,
+        )
+
+    def step(
+        self,
+        actor: Actor,
+        simulation_time: float,
+        deviation_statistics: Optional[Statistic] = None,
+    ) -> None:
+        """
+        Args:
+            vehicle (Vehicle): The Vehicle to move.
+            target_point: The target trajectory point to move towards.
+            simulation_time: The current time in the simulation.
+        """
+
+        if (
+            deviation_statistics is not None
+            and deviation_statistics.__class__.__name__ != "Average_Distance_True"
+        ):
+            raise Exception(
+                "Only Average_Distance_True statistic is currently supported for PIDMovement. "
+                f"Provided statistic: {deviation_statistics.__class__.__name__}"
+            )
+
+        def _pass_point_to_stats(point: CarlaTrajectoryPoint) -> None:
+            # feed the actual trajectory point to the statistics
+            if deviation_statistics is not None:
+                deviation_statistics.add(point)
+
+        curr_traj_time = actor.get_current_trajectory_point().time
+        curr_traj_trafo = actor.get_current_trajectory_point().transform
+        curr_traj_speed = actor.get_current_trajectory_point().speed
+
+        if not actor.is_spawned():
+            # check if it is time to spawn the actor
+            if simulation_time >= curr_traj_time - self._temporal_trigger:
+                logging.info(
+                    f"{actor.name}: trying spawn at sim time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
+                )
+                actor.spawn()
+                # bring actor up to starting speed
+                speed_vector = curr_traj_trafo.get_forward_vector() * (
+                    float(curr_traj_speed) / 3.6
+                )
+                actor.kick(speed_vector)
+                _pass_point_to_stats(actor.get_current_trajectory_point())
+                return
+
+        elif self._traversed_trajectory:
+            # return immediately if whole trajectory has been traversed
+            return
+
+        else:
+            # advance trajectory based on timestamps
+            while simulation_time >= curr_traj_time + self._temporal_trigger:
                 try:
                     actor.advance_trajectory()
+                    curr_traj_time = actor.get_current_trajectory_point().time
+                    curr_traj_trafo = actor.get_current_trajectory_point().transform
+                    curr_traj_speed = actor.get_current_trajectory_point().speed
+                    _pass_point_to_stats(actor.get_current_trajectory_point())
                 except StopIteration:
-                    logging.info(f"{actor.name} Reached end of trajectory")
+                    logging.info(
+                        f"{actor.name}: reached end of trajectory at sim time {simulation_time}"
+                    )
+                    actor.destroy()
+                    self._traversed_trajectory = True
                     return
-            else:
-                break
 
-        control = self._controller.run_step(
-            actor.get_current_trajectory_point().speed,
-            actor.get_current_trajectory_point(),
-        )
-        actor.get_actor().apply_control(control)
+            # perform a measurement by passing the vehicles current location
+            if deviation_statistics is not None:
+                deviation_statistics.add(
+                    (actor.get_actor().get_transform(), simulation_time)
+                )
+
+            control = self._controller.run_step(
+                actor.get_current_trajectory_point().speed,
+                actor.get_current_trajectory_point(),
+            )
+
+            actor.get_actor().apply_control(control)
 
 
 class TeleportMovement(MovementPolicy):
@@ -141,10 +292,21 @@ class TeleportMovement(MovementPolicy):
         Args:
             vehicle (Vehicle): The Vehicle to move.
             simulation_time: The current time in the simulation.
-
-        Returns:
-            None: This method modifies the vehicle's state directly.
         """
+
+        if (
+            deviation_statistics is not None
+            and deviation_statistics.__class__.__name__ != "Average_Distance_True"
+        ):
+            raise Exception(
+                "Only Average_Distance_True statistic is currently supported for PIDMovement. "
+                f"Provided statistic: {deviation_statistics.__class__.__name__}"
+            )
+
+        def _pass_point_to_stats(point: CarlaTrajectoryPoint) -> None:
+            # feed the actual trajectory point to the statistics
+            if deviation_statistics is not None:
+                deviation_statistics.add(point)
 
         curr_traj_time = actor.get_current_trajectory_point().time
         curr_traj_trafo = actor.get_current_trajectory_point().transform
@@ -157,6 +319,7 @@ class TeleportMovement(MovementPolicy):
                     f"{actor.name}: trying spawn at sim time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
                 )
                 actor.spawn()
+                _pass_point_to_stats(actor.get_current_trajectory_point())
                 return
 
         elif self._traversed_trajectory:
@@ -179,19 +342,16 @@ class TeleportMovement(MovementPolicy):
 
             if deviation_statistics is not None:
                 deviation_statistics.add(
-                    (
-                        curr_traj_time,
-                        curr_traj_trafo.location,
-                        speed_vector,
-                        simulation_time,
-                        curr_traj_trafo.location,
-                    )
+                    (actor.get_actor().get_transform(), simulation_time)
                 )
 
             try:
                 actor.advance_trajectory()
+                _pass_point_to_stats(actor.get_current_trajectory_point())
             except StopIteration:
-                logging.info(f"{actor.name} Reached end of trajectory at simulation time {simulation_time}")
+                logging.info(
+                    f"{actor.name}: reached end of trajectory at sim time {simulation_time}"
+                )
                 actor.destroy()
                 self._traversed_trajectory = True
                 return

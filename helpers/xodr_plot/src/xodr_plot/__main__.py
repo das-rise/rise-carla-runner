@@ -23,6 +23,7 @@ def main():
     argparser.add_argument("--diagnose-connectivity", action="store_true", help="Run connectivity diagnostics")
     argparser.add_argument("--fix-geometry", action="store_true", help="Fix geometry issues")
     argparser.add_argument("--plot-route", type=str, help="Plot a route given as a string of coordinate tuples, e.g., '[(0,0), (10,10)]'")
+    argparser.add_argument("--plot-trajectories-folder", type=str, help="Plot all trajectories (.csv) inside a folder")
 
     args = argparser.parse_args()
 
@@ -37,6 +38,32 @@ def main():
         except (ValueError, SyntaxError) as e:
             print(f"Error: failed to parse route string '{args.plot_route[:50]}...' — {e}", file=sys.stderr)
             sys.exit(1)
+
+    routes = None
+    if args.plot_trajectories_folder:
+        folder = args.plot_trajectories_folder
+        if not os.path.isdir(folder):
+            print(f"Error: folder not found — {folder}", file=sys.stderr)
+            sys.exit(1)
+            
+        import csv
+        routes = []
+        for filename in os.listdir(folder):
+            if not filename.endswith('.csv'):
+                continue
+            filepath_csv = os.path.join(folder, filename)
+            trajectory = []
+            with open(filepath_csv, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        x = float(row['x_loc [m]'])
+                        y = float(row['y_loc [m]'])
+                        trajectory.append((x, y))
+                    except (KeyError, ValueError):
+                        pass
+            if trajectory:
+                routes.append(trajectory)
 
     if not os.path.isfile(filepath):
         print(f"Error: file not found — {filepath}", file=sys.stderr)
@@ -99,7 +126,7 @@ def main():
     renderer.render(all_polys, all_boundaries, all_refs,
                     title=title,
                     ep_issues=ep_issues if diagnose_connectivity else None,
-                    route = route)
+                    route=route, routes=routes)
 
 
 if __name__ == '__main__':

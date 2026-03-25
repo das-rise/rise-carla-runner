@@ -35,7 +35,7 @@ def main():
         try:
             route = ast.literal_eval(args.plot_route)
         except (ValueError, SyntaxError) as e:
-            print(f"Error: failed to parse route string — {e}", file=sys.stderr)
+            print(f"Error: failed to parse route string '{args.plot_route[:50]}...' — {e}", file=sys.stderr)
             sys.exit(1)
 
     if not os.path.isfile(filepath):

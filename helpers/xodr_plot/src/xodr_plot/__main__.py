@@ -8,23 +8,35 @@ Usage:
 
 import sys
 import os
+import argparse
+import ast
 
 from . import parser, geometry, renderer, connectivity, fixer
 
 
 def main():
-    args = sys.argv[1:]
+    argparser = argparse.ArgumentParser(
+        prog="xodr-plot",
+        description="CLI tool to visualise OpenDRIVE (.xodr) files with Matplotlib"
+    )
+    argparser.add_argument("filepath", help="Path to the .xodr file")
+    argparser.add_argument("--diagnose-connectivity", action="store_true", help="Run connectivity diagnostics")
+    argparser.add_argument("--fix-geometry", action="store_true", help="Fix geometry issues")
+    argparser.add_argument("--plot-route", type=str, help="Plot a route given as a string of coordinate tuples, e.g., '[(0,0), (10,10)]'")
 
-    if not args or args[0] in ('-h', '--help'):
-        print("Usage: xodr-plot <file.xodr> [--diagnose-connectivity] [--fix-geometry]")
-        sys.exit(0)
+    args = argparser.parse_args()
 
-    filepath             = args[0]
-    diagnose_connectivity = '--diagnose-connectivity' in args
-    fix_geometry          = '--fix-geometry' in args
-    plot_route            = '--plot-route' in args
-    route = args[args.index('--plot-route') + 1] if plot_route else None
-    route = eval(route) if route else None
+    filepath              = args.filepath
+    diagnose_connectivity = args.diagnose_connectivity
+    fix_geometry          = args.fix_geometry
+    
+    route = None
+    if args.plot_route:
+        try:
+            route = ast.literal_eval(args.plot_route)
+        except (ValueError, SyntaxError) as e:
+            print(f"Error: failed to parse route string — {e}", file=sys.stderr)
+            sys.exit(1)
 
     if not os.path.isfile(filepath):
         print(f"Error: file not found — {filepath}", file=sys.stderr)

@@ -4,4 +4,4 @@ src/rirun/camera_output/*
 src/rirun.egg-info/*
 .vscode/*
 output/*
-pretrained/*
+pretrained/

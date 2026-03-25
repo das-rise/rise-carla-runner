@@ -176,7 +176,7 @@ class InteractiveSelector:
 # ── Main render function ──────────────────────────────────────────────────────
 
 def render(all_polys, all_boundaries, all_refs, title: str = 'OpenDRIVE Map',
-           ep_issues=None, lane_issues=None, route=None):
+           ep_issues=None, lane_issues=None, route=None, routes=None):
     """
     Parameters
     ----------
@@ -322,6 +322,14 @@ def render(all_polys, all_boundaries, all_refs, title: str = 'OpenDRIVE Map',
         ys = [pt[0] for pt in route]
         ax.plot(xs, ys, color='cyan', linewidth=2.0, zorder=4, label='Route')
         ax.scatter(xs[-1], ys[-1], color='lime', edgecolor='white', s=80, marker="x", zorder=5, label='Route Start')
+
+    if routes is not None:
+        for r in routes:
+            if not r: continue
+            xs = [-pt[1] for pt in r]
+            ys = [pt[0] for pt in r]
+            ax.plot(xs, ys, color='cyan', linewidth=1.5, zorder=4, alpha=0.7)
+            ax.scatter(xs[-1], ys[-1], color='lime', edgecolor='white', s=40, marker="x", zorder=5)
 
     plt.tight_layout(pad=0.5)
     plt.show()

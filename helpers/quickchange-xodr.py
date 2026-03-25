@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-import math
+import argparse
 
 def process_xodr_file(input_file_path, output_file_path, shift_x=0.0, shift_y=0.0, width_increase=None, center=False, symmetric_widening=False):
     """
@@ -235,6 +235,23 @@ def process_xodr_file(input_file_path, output_file_path, shift_x=0.0, shift_y=0.
         print(f"Error writing to output file: {e}")
 
 if __name__ == "__main__":
-    INPUT_FILE = 'SaroRound_2lane_fix_v2.xodr'
-    OUTPUT_FILE = 'SaroRound_2lane_fix_v2_wider.xodr'
-    process_xodr_file(INPUT_FILE, OUTPUT_FILE, shift_x=0, shift_y=0, width_increase=2.5, center=False, symmetric_widening=True)
+    parser = argparse.ArgumentParser(description="Modify OpenDRIVE (XODR) geometry coordinates and lane widths.")
+    parser.add_argument("input_file", help="Path to the input .xodr file.")
+    parser.add_argument("output_file", help="Path where the modified .xodr file will be saved.")
+    parser.add_argument("--shift-x", type=float, default=0.0, help="Shift all X coordinates by this amount (default: 0.0).")
+    parser.add_argument("--shift-y", type=float, default=0.0, help="Shift all Y coordinates by this amount (default: 0.0).")
+    parser.add_argument("--width-increase", type=float, default=None, help="Change the width of road lanes by this amount.")
+    parser.add_argument("--center", action="store_true", help="Center the geometry by moving the minimum coordinates to the origin.")
+    parser.add_argument("--symmetric-widening", action="store_true", help="Treat width_increase as total road width increase and distribute symmetrically.")
+
+    args = parser.parse_args()
+
+    process_xodr_file(
+        args.input_file,
+        args.output_file,
+        shift_x=args.shift_x,
+        shift_y=args.shift_y,
+        width_increase=args.width_increase,
+        center=args.center,
+        symmetric_widening=args.symmetric_widening
+    )

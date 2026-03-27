@@ -300,16 +300,21 @@ class PCLA():
         agent = self.agent_instance
         if hasattr(agent, '_route_planner'):
             planner = agent._route_planner
+            # Lazily capture initial route length on first access
+            if not hasattr(self, '_initial_route_length'):
+                if hasattr(planner, 'route'):
+                    self._initial_route_length = len(planner.route)
+                else:
+                    self._initial_route_length = 0
+            # Only consider completed if waypoints were actually consumed,
+            # avoiding false positives on short/downsampled routes that
+            # start with <= 2 waypoints.
+            if self._initial_route_length <= 2:
+                return False
             if hasattr(planner, 'is_last'):
                 return planner.is_last
-            # For planners without is_last (e.g. NEAT): route is completed
-            # when it has shrunk to its minimum buffer (2) AND waypoints
-            # were actually consumed, avoiding false positives on short routes.
-            if hasattr(planner, 'route'):
-                if not hasattr(self, '_initial_route_length'):
-                    self._initial_route_length = len(planner.route)
-                if len(planner.route) <= 2 and self._initial_route_length > 2:
-                    return True
+            if hasattr(planner, 'route') and len(planner.route) <= 2:
+                return True
         return False
 
     def cleanup(self):

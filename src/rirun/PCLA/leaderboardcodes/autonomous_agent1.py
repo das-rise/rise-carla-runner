@@ -117,10 +117,10 @@ class AutonomousAgent(object):
 
         return control
 
-    def set_global_plan(self, global_plan_gps, global_plan_world_coord):
+    def set_global_plan(self, global_plan_gps, global_plan_world_coord, ds_sample_factor=25):
         """
         Set the plan (route) for the agent
         """
-        ds_ids = downsample_route(global_plan_world_coord, 50)
+        ds_ids = downsample_route(global_plan_world_coord, ds_sample_factor)
         self._global_plan_world_coord = [(global_plan_world_coord[x][0], global_plan_world_coord[x][1]) for x in ds_ids]
         self._global_plan = [global_plan_gps[x] for x in ds_ids]

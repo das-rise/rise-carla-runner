@@ -142,6 +142,9 @@ def parse_arguments():
     if args.pcla_route and not args.pcla_agent:
         parser.error("--pcla_agent is required when --pcla_route is specified")
 
+    if not args.trajectory_filepaths and not args.pcla_agent:
+        parser.error("At least one trajectory file or --pcla_agent must be provided")
+
     # Validate required environment variables based on chosen PCLA agent
     if args.pcla_agent:
         try:

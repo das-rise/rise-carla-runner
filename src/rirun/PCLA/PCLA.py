@@ -302,8 +302,14 @@ class PCLA():
             planner = agent._route_planner
             if hasattr(planner, 'is_last'):
                 return planner.is_last
-            if hasattr(planner, 'route') and len(planner.route) <= 2:
-                return True
+            # For planners without is_last (e.g. NEAT): route is completed
+            # when it has shrunk to its minimum buffer (2) AND waypoints
+            # were actually consumed, avoiding false positives on short routes.
+            if hasattr(planner, 'route'):
+                if not hasattr(self, '_initial_route_length'):
+                    self._initial_route_length = len(planner.route)
+                if len(planner.route) <= 2 and self._initial_route_length > 2:
+                    return True
         return False
 
     def cleanup(self):

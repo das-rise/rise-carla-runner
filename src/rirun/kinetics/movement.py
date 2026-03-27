@@ -404,14 +404,16 @@ class PCLA_Movement(MovementPolicy):
                 self._client,
             )
 
-        # If route already completed on a prior step, just keep braking
+        # Always call get_action() to drain sensor buffers and avoid
+        # unbounded memory growth from queued camera/lidar frames.
+        ego_action = self._pcla.get_action()
+
         if self._route_completed_logged:
             actor.get_actor().apply_control(
                 carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
             )
             return
 
-        ego_action = self._pcla.get_action()
         ego_action.throttle = math.pow(ego_action.throttle, self._throttle_exponent)
 
         # Check after get_action (which updates the route planner) if route is done

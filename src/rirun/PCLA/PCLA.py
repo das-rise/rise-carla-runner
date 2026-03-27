@@ -5,6 +5,7 @@
 # For a copy, see <https://opensource.org/licenses/MIT>.
 
 import importlib
+import logging
 import os
 import sys
 # Get the directory of the current file (PCLA.py)
@@ -176,7 +177,18 @@ class PCLA():
         
         gps_route, route = interpolate_trajectory(self.world, config.trajectory)
 
+        logging.info(
+            f"Interpolated route: {len(route)} dense waypoints "
+            f"from {len(config.trajectory)} XML waypoints"
+        )
+
         self.agent_instance.set_global_plan(gps_route, route)
+
+        if hasattr(self.agent_instance, '_global_plan'):
+            logging.info(
+                f"Agent global plan after downsampling: "
+                f"{len(self.agent_instance._global_plan)} waypoints"
+            )
 
     def setup_sensors(self):
         """
@@ -281,7 +293,19 @@ class PCLA():
         if timestamp:
             GameTime.on_carla_tick(timestamp)
             return(self.agent_instance())
-    
+
+    @property
+    def route_completed(self):
+        """Check if the agent's route planner has reached the last waypoint."""
+        agent = self.agent_instance
+        if hasattr(agent, '_route_planner'):
+            planner = agent._route_planner
+            if hasattr(planner, 'is_last'):
+                return planner.is_last
+            if hasattr(planner, 'route') and len(planner.route) <= 2:
+                return True
+        return False
+
     def cleanup(self):
         """
         Remove and destroy all actors

@@ -373,6 +373,7 @@ class PCLA_Movement(MovementPolicy):
         self._client = client
         self._pcla = None
         self._throttle_exponent = 1.0
+        self._route_completed_logged = False
 
     def step(
         self,
@@ -403,14 +404,23 @@ class PCLA_Movement(MovementPolicy):
                 self._client,
             )
 
+        # If route already completed on a prior step, just keep braking
+        if self._route_completed_logged:
+            actor.get_actor().apply_control(
+                carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
+            )
+            return
+
         ego_action = self._pcla.get_action()
         ego_action.throttle = math.pow(ego_action.throttle, self._throttle_exponent)
 
-        # logging.info(f"throttle: {ego_action.throttle}, brake: {ego_action.brake}")
+        # Check after get_action (which updates the route planner) if route is done
+        if self._pcla.route_completed:
+            ego_action = carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
+            logging.info("PCLA agent reached end of route. Stopping.")
+            self._route_completed_logged = True
 
         actor.get_actor().apply_control(ego_action)
-
-        # TODO: find out that agent has reached end of trajectory and kill agent?
 
     def set_throttle_exponent(self, exponent: float) -> None:
         """

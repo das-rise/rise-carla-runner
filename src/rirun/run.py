@@ -75,6 +75,7 @@ def parse_arguments():
         type=str,
         nargs="*",
         dest="trajectory_filepaths",
+        default=[],
         help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
     )
     parser.add_argument(

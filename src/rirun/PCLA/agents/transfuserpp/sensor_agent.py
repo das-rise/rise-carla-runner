@@ -188,6 +188,13 @@ class SensorAgent(autonomous_agent.AutonomousAgent):
     else:
       self.save_path = None
 
+  @staticmethod
+  def _ensure_positive_definite(P):
+    P = (P + P.T) / 2
+    eigvals, eigvecs = np.linalg.eigh(P)
+    eigvals = np.maximum(eigvals, 1e-6)
+    return eigvecs @ np.diag(eigvals) @ eigvecs.T
+
   def _init(self):
     # During setup() not everything is available yet, so this _init is a second setup in run_step()
     # Privileged map access for logging and visualizations. Turned off during normal evaluation.
@@ -300,8 +307,12 @@ class SensorAgent(autonomous_agent.AutonomousAgent):
       self.ukf.x = np.array([gps_pos[0], gps_pos[1], t_u.normalize_angle(compass), speed])
       self.filter_initialized = True
 
+    # Enforce symmetric positive-definiteness before predict/update to prevent Cholesky failure
+    self.ukf.P = self._ensure_positive_definite(self.ukf.P)
     self.ukf.predict(steer=self.control.steer, throttle=self.control.throttle, brake=self.control.brake)
+    self.ukf.P = self._ensure_positive_definite(self.ukf.P)
     self.ukf.update(np.array([gps_pos[0], gps_pos[1], t_u.normalize_angle(compass), speed]))
+    self.ukf.P = self._ensure_positive_definite(self.ukf.P)
     filtered_state = self.ukf.x
     self.state_log.append(filtered_state)
 

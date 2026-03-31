@@ -1,6 +1,7 @@
 python src/rirun/run.py \
     15 \
     Town01 \
+    --trajectory-filepaths scenes/roundabout-saro/npc_test_routes/at_big_roundabout.csv \
     scenes/town01/npc_test_routes/vehicle1_straight.csv \
     --movement teleport \
     --timestep 0.0333333333333333333 \

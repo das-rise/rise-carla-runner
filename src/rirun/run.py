@@ -70,10 +70,12 @@ def parse_arguments():
         help="Path to OpenDrive (*.xodr) or Carla map (*.snet) file.",
     )
     parser.add_argument(
-        "trajectory_filepaths",
+        "--trajectory-filepaths",
+        "-tf",
         type=str,
         nargs="*",
         default=[],
+        dest="trajectory_filepaths",
         help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
     )
     parser.add_argument(

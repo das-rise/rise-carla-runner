@@ -70,9 +70,12 @@ def parse_arguments():
         help="Path to OpenDrive (*.xodr) or Carla map (*.snet) file.",
     )
     parser.add_argument(
-        "trajectory_filepaths",
+        "--trajectory-filepaths",
+        "-tf",
         type=str,
-        nargs="+",
+        nargs="*",
+        dest="trajectory_filepaths",
+        default=[],
         help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
     )
     parser.add_argument(
@@ -140,6 +143,9 @@ def parse_arguments():
         parser.error("--pcla_route is required when --pcla_agent is specified")
     if args.pcla_route and not args.pcla_agent:
         parser.error("--pcla_agent is required when --pcla_route is specified")
+
+    if not args.trajectory_filepaths and not args.pcla_agent:
+        parser.error("At least one trajectory file or --pcla_agent must be provided")
 
     # Validate required environment variables based on chosen PCLA agent
     if args.pcla_agent:

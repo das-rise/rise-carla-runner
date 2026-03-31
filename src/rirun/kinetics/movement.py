@@ -419,7 +419,7 @@ class PCLA_Movement(MovementPolicy):
         # Check after get_action (which updates the route planner) if route is done
         if self._pcla.route_completed:
             ego_action = carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
-            logging.info("PCLA agent reached end of route. Stopping.")
+            logging.info(f"{actor.name}: reached end of trajectory (`self._pcla.route_completed`). Stopping.")
             self._route_completed_logged = True
 
         actor.get_actor().apply_control(ego_action)

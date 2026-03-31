@@ -99,7 +99,13 @@ python -m traj_convert traj.parquet osi 752 0.1.0 "" "Town01.xodr" -o output.osi
 
 ## PCLA agent route generation
 
-An example of how the `xml` file defining the waypoints for a PCLA agent can be created is found in `scenes/ekas-landvag/generate_agent_route.py`, there for the example of `Town01.xodr`. However, it is straightforwardly generalizable from there.
+An example of how to generate the `xml` waypoints file for a PCLA agent is in `scenes/ekas-landvag/generate_agent_route.py` (for `Town01.xodr`). 
+
+To generate such routes, use the tool `xodr-plot` in the `helpers/` folder.
+```bash
+xodr-plot path-to-opendrive.xodr
+```
+Then, place waypoints by clicking on the map and then adjusting the waypoint angle in the popup. Add as many waypoints as required. Upon closing the plot window, the entire `.xml` route is printed to `stdout` and can be copy-pasted to some `agent-route.xml` file.
 
 ## PCLA addendum
 

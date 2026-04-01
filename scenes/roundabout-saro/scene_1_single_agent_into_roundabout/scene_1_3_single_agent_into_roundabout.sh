@@ -2,7 +2,7 @@ export DIRECT=0
 python src/rirun/run.py \
   45 \
   scenes/roundabout-saro/scene_1_single_agent_into_roundabout/SaroRound_2lane_u_adj_14.xodr \
-  --trajectory-filepaths saro_roundabout_converted3/*Car.csv \
+  --trajectory-filepaths saro_roundabout_converted4/*Car.csv \
   --movement teleport \
   --timestep 0.0333333333333333333 \
   --offset_time 1013 \

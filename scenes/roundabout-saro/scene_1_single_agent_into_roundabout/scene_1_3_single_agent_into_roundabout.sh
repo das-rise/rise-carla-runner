@@ -1,4 +1,7 @@
-export DIRECT=0
+. helpers/docker-quick.sh
+
+carla_docker_restart
+
 python src/rirun/run.py \
   45 \
   scenes/roundabout-saro/scene_1_single_agent_into_roundabout/SaroRound_2lane_u_adj_14.xodr \

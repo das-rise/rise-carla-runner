@@ -1,0 +1,11 @@
+[project]
+name = "topology"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.8"
+dependencies = [
+    "carla==0.9.15",
+    "ipykernel>=6.29.5",
+    "ipympl>=0.9.3",
+    "matplotlib>=3.7.5",
+]

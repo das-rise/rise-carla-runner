@@ -124,6 +124,12 @@ def parse_arguments():
         help="Path to XML file containing the route for the PCLA agent (required if --pcla_agent is specified).",
     )
     parser.add_argument(
+        "--pcla_spawn_time",
+        type=float,
+        default=-1.0,
+        help="The simulation time at which the PCLA agent's vehicle should be spawned and start following the trajectory. If set to a negative value, the vehicle will be spawned immediately at the first trajectory point. Defaults to -1.0.",
+    )
+    parser.add_argument(
         "--offset_time",
         type=float,
         default=0.0,
@@ -249,7 +255,7 @@ def main() -> None:
             f"Adding PCLA agent: {args.pcla_agent} with route: {args.pcla_route}"
         )
         pcla_agent_enum = PCLA_Agent(args.pcla_agent)
-        pcla_movement = PCLA_Movement(pcla_agent_enum, client)
+        pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.pcla_spawn_time)
         pcla_movement.set_throttle_exponent(1)
         pcla_vehicle = Vehicle(
             world,

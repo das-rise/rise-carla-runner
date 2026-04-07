@@ -1,4 +1,7 @@
-export DIRECT=0
+. helpers/docker-quick.sh
+
+carla_docker_restart
+
 python src/rirun/run.py \
   45 \
   scenes/roundabout-saro/scene_1_single_agent_into_roundabout/saro_fixed_bidirectional_WIDER_LANES_modified.xodr \

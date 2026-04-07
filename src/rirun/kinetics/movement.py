@@ -358,9 +358,8 @@ class TeleportMovement(MovementPolicy):
 
 
 class PCLA_Movement(MovementPolicy):
-    _START_TIME = 0
 
-    def __init__(self, pcla_agent: PCLA_Agent, client: carla.Client) -> None:
+    def __init__(self, pcla_agent: PCLA_Agent, client: carla.Client, spawn_timepoint: float = -1.0) -> None:
         """
         Initialize the PCLA_Movement policy.
 
@@ -368,12 +367,15 @@ class PCLA_Movement(MovementPolicy):
             pcla_agent (PCLA_Agent): The PCLA agent responsible for decision making
             xml_route (str): Path to route agent must follow, path must be .xml file
             client (carla.Client): CARLA client instance
+            spawn_timepoint (float): The simulation time at which the vehicle should be spawned and start following the trajectory.
+                If set to a negative value, the vehicle will be spawned immediately at the first trajectory point. Defaults to -1.0.
         """
         self._pcla_agent = pcla_agent
         self._client = client
         self._pcla = None
         self._throttle_exponent = 1.0
         self._route_completed_logged = False
+        self._spawn_timepoint = spawn_timepoint
 
     def step(
         self,
@@ -389,7 +391,7 @@ class PCLA_Movement(MovementPolicy):
             simulation_time (Optional[float]): Current simulation time
             deviation_statistics (Optional[Statistic]): Statistics about deviation from route, currently ignored
         """
-        if simulation_time < self._START_TIME:
+        if simulation_time < self._spawn_timepoint:
             return
 
         elif not actor.is_spawned():

@@ -39,6 +39,7 @@ dependencies = [
   "imgaug==0.4.0",
   "filterpy==1.4.5",
   "rdp==0.8",
+  "xodr-plot @ file:helpers/xodr_plot",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +54,7 @@ dev = [
   "black==24.8.0",
   "ruff==0.13.2",
   "ipykernel==6.29.5",
+  "ipympl",
   "line-profiler==4.1.2",
   "wandb==0.21.4",
 ]

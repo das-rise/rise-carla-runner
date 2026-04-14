@@ -32,7 +32,7 @@ class MovementPolicy:
 class PIDMovement(MovementPolicy):
     """Move using CARLA's VehiclePIDController aiming at the target waypoint."""
 
-    MIN_DIST_TO_WAYPOINT = 2
+    MIN_DIST_TO_WAYPOINT = 5
 
     def __init__(
         self,

@@ -53,7 +53,8 @@ class PCLA_Agent(Enum):
 
 def check_agent_env(agent: PCLA_Agent) -> None:
     """
-    Chheck whether environment variables required by specific PCLA agents are set.
+    Check whether environment variables required by specific PCLA agents are set,
+    sets them if they are not.
 
     Args:
         agent (PCLA_Agent): The PCLA agent to check environment variables for.
@@ -63,24 +64,16 @@ def check_agent_env(agent: PCLA_Agent) -> None:
 
     if agent in [PCLA_Agent.TFPP_L6_0, PCLA_Agent.TFPP_L6_1, PCLA_Agent.TFPP_L6_2]:
         if not os.environ.get("UNCERTAINTY_THRESHOLD"):
-            raise RuntimeError(
-                "UNCERTAINTY_THRESHOLD=0.33 environment variable not found for tfpp_l6 agents"
-            )
+            os.environ["UNCERTAINTY_THRESHOLD"] = "0.33"  # Default value if not set
     elif agent in [PCLA_Agent.TFPP_LAV_0, PCLA_Agent.TFPP_LAV_1, PCLA_Agent.TFPP_LAV_2]:
         if not os.environ.get("STOP_CONTROL"):
-            raise RuntimeError(
-                "STOP_CONTROL=1 environment variable not found for tfpp_lav agents"
-            )
+            os.environ["STOP_CONTROL"] = "1"  # Default value if not set
     elif agent in [PCLA_Agent.TFPP_AIM_0, PCLA_Agent.TFPP_AIM_1, PCLA_Agent.TFPP_AIM_2]:
         if not os.environ.get("DIRECT"):
-            raise RuntimeError(
-                "DIRECT=0 environment variable not found for tfpp_aim agents"
-            )
+            os.environ["DIRECT"] = "0"  # Default value if not set
     elif agent in [PCLA_Agent.TFPP_WP_0, PCLA_Agent.TFPP_WP_1, PCLA_Agent.TFPP_WP_2]:
         if not os.environ.get("DIRECT"):
-            raise RuntimeError(
-                "DIRECT=0 environment variable not found for tfpp_wp agents"
-            )
+            os.environ["DIRECT"] = "0"  # Default value if not set
     elif agent == PCLA_Agent.IF_IF:
         if not os.environ.get("ROUTES"):
             raise RuntimeError(

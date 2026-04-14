@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rirun"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Carla runner for creating parametrizable scenarios from real-world automotive scenes"
 readme = "README.md"
 requires-python = ">=3.8,<3.9"
@@ -39,6 +39,7 @@ dependencies = [
   "imgaug==0.4.0",
   "filterpy==1.4.5",
   "rdp==0.8",
+  "xodr-plot @ file:helpers/xodr_plot",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +54,7 @@ dev = [
   "black==24.8.0",
   "ruff==0.13.2",
   "ipykernel==6.29.5",
+  "ipympl",
   "line-profiler==4.1.2",
   "wandb==0.21.4",
 ]

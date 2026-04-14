@@ -1,7 +1,7 @@
 import argparse
-from datetime import datetime
 import os
 import time
+from datetime import datetime, timezone
 from rich_argparse import RichHelpFormatter
 import signal
 import sys
@@ -20,6 +20,11 @@ from traj_convert.carla2traj import Carla2Traj
 from rirun.utils.carla_tools import load_map
 
 # Helper functions
+
+
+def timestamp_now_dataprov() -> str:
+    """Returns the current timestamp in ISO 8601 format for use with dataprov."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def cleanup(sig: signal.Signals) -> None:
@@ -141,6 +146,18 @@ def parse_arguments():
         choices=["average_distance_true"],
         help="Choice of trajectory deviation statistics to compute during the run.",
     )
+    parser.add_argument(
+        "--use-dataprov",
+        action="store_true",
+        help="Use dataprov library to create a provenance chain for the conversion",
+    )
+    parser.add_argument(
+        "--dataprov-input-provenance-files",
+        type=str,
+        nargs="*",
+        default=[],
+        help="List of dataprov provenance files in the order 'OpenLabel, georef' to include as inputs in the provenance chain. One or both can be 'None'. Only used if --use-dataprov is set.",
+    )
 
     args = parser.parse_args()
 
@@ -164,6 +181,8 @@ def parse_arguments():
 
 
 def main() -> None:
+    start_time = timestamp_now_dataprov()
+
     args = parse_arguments()
 
     if not args.carla_address:
@@ -207,7 +226,7 @@ def main() -> None:
         # fixed_delta_seconds <= max_substep_delta_time * max_substeps
         max_substeps = 10
         settings.max_substeps = max_substeps
-        settings.max_substep_delta_time = timestep / ( max_substeps - 1 )
+        settings.max_substep_delta_time = timestep / (max_substeps - 1)
     world.apply_settings(settings)
 
     logging.info(f"Carla world settings: \n{world.get_settings()}")
@@ -348,13 +367,80 @@ def main() -> None:
         )
         spinner.update_message("Saving outputs...")
         spinner.start()
-        cam.stop_recording(num_ticks)  # ensure all frames are flushed to disk before proceeding
+        cam.stop_recording(
+            num_ticks
+        )  # ensure all frames are flushed to disk before proceeding
         traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
 
         spinner.stop()
 
         # Destroy all remaining active vehicles
         [v.destroy() for v in active_vehicles]
+
+        if args.use_dataprov:
+            from dataprov import ProvenanceChain
+            from importlib.metadata import metadata
+            import hashlib
+
+            unique_hash = hashlib.sha256(
+                (str(vars(args)) + str(time.time_ns())).encode()
+            ).hexdigest()
+            tool_name = "rirun"
+            meta = metadata(tool_name)
+            entity_id = tool_name + "_" + unique_hash[:8]
+
+            if args.dataprov_input_provenance_files:
+                input_provenance_files = args.dataprov_input_provenance_files
+            else:
+                input_provenance_files = None
+
+            mode_string = "real trajectories" if args.trajectory_filepaths else ""
+            mode_string += (
+                " and autonomous agents"
+                if args.pcla_agent and mode_string
+                else "autonomous agents"
+                if args.pcla_agent
+                else ""
+            )
+
+            raw_inputs = [*args.trajectory_filepaths, args.map_filepath, args.pcla_route]
+            raw_input_formats = ["CSV"] * len(args.trajectory_filepaths) if args.trajectory_filepaths else ["CSV"] 
+            raw_input_formats += ["OpenDrive/Carla map", "XML"]
+            inputs = [inp for inp in raw_inputs if inp]
+            input_formats = [
+                fmt for inp, fmt in zip(raw_inputs, raw_input_formats) if inp
+            ]
+
+            chain = ProvenanceChain.create(
+                entity_id=entity_id,
+                initial_source=args.trajectory_filepaths,
+                description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
+                tags=[
+                    "RIRUN",
+                    "trajectory",
+                    "Synergies",
+                ],
+            )
+
+            chain.add(
+                started_at=start_time,
+                ended_at=timestamp_now_dataprov(),
+                tool_name=tool_name,
+                tool_version=meta["Version"],
+                arguments=" ".join(sys.argv[1:]),
+                operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
+                inputs=inputs,
+                input_formats=input_formats,
+                outputs=[
+                    args.output_dir + f"/traj/traj_{start_ts}.parquet",
+                    args.output_dir + f"/camera/camera_{start_ts}.mp4",
+                ],
+                output_formats=["Parquet", "MP4"],
+                input_provenance_files=input_provenance_files,
+                capture_environment=True,
+            )
+
+            chain.save(f"{args.output_dir}/{entity_id}_prov.json")
 
         if success:
             logging.info("Simulation completed successfully.")

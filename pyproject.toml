@@ -39,6 +39,7 @@ dependencies = [
   "imgaug==0.4.0",
   "filterpy==1.4.5",
   "rdp==0.8",
+  "dataprov @ git+https://github.com/BastianHavers/dataprov.git@feature/py38-compatibility",
 ]
 
 [project.optional-dependencies]

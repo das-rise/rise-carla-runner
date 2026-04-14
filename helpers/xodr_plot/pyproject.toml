@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xodr-plot"
+version = "0.2.0"
+description = "CLI tool to visualise OpenDRIVE (.xodr) files with Matplotlib"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "matplotlib>=3.5",
+    "numpy>=1.21",
+]
+
+[project.scripts]
+xodr-plot = "xodr_plot.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xodr_plot"]

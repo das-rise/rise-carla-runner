@@ -184,72 +184,114 @@ class Trajectory:
 
         self.add_speeds(speeds)
 
-    def gen_headings(self) -> None:
+    def gen_headings(self, mode: str="straight") -> None:
         """
-        Generate the headings by calculating them from the bare route
+        Generate the headings by calculating them from the bare route.
+        Args:
+            mode (str): The mode to use for heading generation. "straight" (default): Calculate headings based on the angle between the current and the next trajectory point. "spline": Create a spline curve over the trajectory to generate heading angles.
         """
-        assert not self._has_headings, "Already has headings, will not overwrite."
+        assert mode in ["straight", "spline"], f"Invalid mode {mode} for heading generation. Expected 'straight' or 'spline'."
 
-        def get_angle(x1: float, y1: float, x2: float, y2: float) -> float:
-            """
-            Calculate the yaw (in Carla lingo) as the angle in the plane relative to the x-axis
-            """
-            vector = [x2 - x1, y2 - y1]
-            vector_len = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-            unit = [1, 0]
-            angle_rad = acos((vector[0] * unit[0] + vector[1] * unit[1]) / vector_len)
-            angle_deg = angle_rad * 180 / pi
-            if vector[1] < 0:  # correct for vectors in the left half plane
-                angle_deg = 360 - angle_deg
-            return angle_deg
+        if mode == "straight":
 
-        headings = []
-        headings.append(None)
-        traj_curr = self.get_trajectory()
-        traj_next = self.get_trajectory()
+            def get_angle(x1: float, y1: float, x2: float, y2: float) -> float:
+                """
+                Calculate the yaw (in Carla lingo) as the angle in the plane relative to the x-axis
+                """
+                vector = [x2 - x1, y2 - y1]
+                vector_len = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+                unit = [1, 0]
+                angle_rad = acos((vector[0] * unit[0] + vector[1] * unit[1]) / vector_len)
+                angle_deg = angle_rad * 180 / pi
+                if vector[1] < 0:  # correct for vectors in the left half plane
+                    angle_deg = 360 - angle_deg
+                return angle_deg
 
-        traj_point_curr = None
-        traj_point_next = None
+            headings = []
+            headings.append(None)
+            traj_curr = self.get_trajectory()
+            traj_next = self.get_trajectory()
 
-        placeholder_is_active = False
-        placeholder = "placeholder"
-        while True:
-            try:
-                traj_point_next = next(traj_next)
-                if traj_point_curr is None:
-                    pass
+            traj_point_curr = None
+            traj_point_next = None
 
-                elif (
-                    traj_point_curr.x == traj_point_next.x
-                    and traj_point_curr.y == traj_point_next.y
-                ):
-                    # in this case, the vehicle is stationary and we set a placeholder
-                    headings.append(placeholder)
-                    placeholder_is_active = True
+            placeholder_is_active = False
+            placeholder = "placeholder"
+            while True:
+                try:
+                    traj_point_next = next(traj_next)
+                    if traj_point_curr is None:
+                        pass
 
-                else:
-                    heading = get_angle(
-                        traj_point_curr.x,
-                        traj_point_curr.y,
-                        traj_point_next.x,
-                        traj_point_next.y,
-                    )
-                    headings.append(heading)
+                    elif (
+                        traj_point_curr.x == traj_point_next.x
+                        and traj_point_curr.y == traj_point_next.y
+                    ):
+                        # in this case, the vehicle is stationary and we set a placeholder
+                        headings.append(placeholder)
+                        placeholder_is_active = True
 
-                    if placeholder_is_active:
-                        # that means that the vehicle was stationary until now. In that case, replace all headings of the just-ended stationary phase with the current heading
-                        for i, h in enumerate(headings):
-                            if h == placeholder:
-                                headings[i] = heading
-                        placeholder_is_active = False
+                    else:
+                        heading = get_angle(
+                            traj_point_curr.x,
+                            traj_point_curr.y,
+                            traj_point_next.x,
+                            traj_point_next.y,
+                        )
+                        headings.append(heading)
 
-                traj_point_curr = next(traj_curr)
+                        if placeholder_is_active:
+                            # that means that the vehicle was stationary until now. In that case, replace all headings of the just-ended stationary phase with the current heading
+                            for i, h in enumerate(headings):
+                                if h == placeholder:
+                                    headings[i] = heading
+                            placeholder_is_active = False
 
-            except StopIteration:
-                break
+                    traj_point_curr = next(traj_curr)
 
-        headings[0] = headings[1]
-        self.add_headings(headings)
+                except StopIteration:
+                    break
+
+            headings[0] = headings[1]
+            self.add_headings(headings)
+
+        elif mode == "spline":
+            import scipy.interpolate as interpolate
+
+            # Remove consecutive duplicate points, tracking original indices
+            dedup_x = [self._x[0]]
+            dedup_y = [self._y[0]]
+            dedup_indices = [0]
+            for i in range(1, self._len_trajectory):
+                if self._x[i] != self._x[i - 1] or self._y[i] != self._y[i - 1]:
+                    dedup_x.append(self._x[i])
+                    dedup_y.append(self._y[i])
+                    dedup_indices.append(i)
+
+            tck, u = interpolate.splprep([dedup_x, dedup_y], k=3, s=100)
+            dx, dy = interpolate.splev(u, tck, der=1)
+
+            # Compute headings for deduplicated points
+            dedup_headings = []
+            for dxi, dyi in zip(dx, dy):
+                vec_len = sqrt(dxi**2 + dyi**2)
+                angle_rad = acos(dxi / vec_len)
+                angle_deg = angle_rad * 180 / pi
+                if dyi < 0:
+                    angle_deg = 360 - angle_deg
+                dedup_headings.append(angle_deg)
+
+            # Expand back: duplicates get the same heading as the kept point
+            headings = [None] * self._len_trajectory
+            for j, orig_idx in enumerate(dedup_indices):
+                headings[orig_idx] = dedup_headings[j]
+            for i in range(self._len_trajectory):
+                if headings[i] is None:
+                    headings[i] = headings[i - 1]
+
+            self.add_headings(headings)
+
+
 
     def plot(self, world: carla.World) -> None:
         """

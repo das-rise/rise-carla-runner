@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import carla
 
 
-def process_trajectory_file(trajectory_filepath) -> Trajectory:
+def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str = "straight", force_heading_interpolation: bool = False) -> Trajectory:
     """Process a trajectory file and return a Trajectory object.
 
     A trajectory file is expected to be a CSV file containing lines with three to five comma-separated values:
@@ -13,6 +13,8 @@ def process_trajectory_file(trajectory_filepath) -> Trajectory:
 
     Args:
         trajectory_filepath (str): The filepath to the trajectory file.
+        heading_interpolation_mode (str): The mode to use for heading generation. "straight" (default): Calculate headings based on the angle between the current and the next trajectory point. "spline": Create a spline curve over the trajectory to generate heading angles.
+        force_heading_interpolation (bool): If True, forces heading interpolation even if the trajectory file contains heading information. Default is False.
 
     Returns:
         Trajectory: A processed Trajectory object.
@@ -34,11 +36,10 @@ def process_trajectory_file(trajectory_filepath) -> Trajectory:
             bare_route.append(line_readings)
     trajectory = Trajectory(bare_route)
     trajectory.apply_carla_coord_conversion()
-    if num_fields == 3:
-        trajectory.gen_speeds()
-        trajectory.gen_headings()
-    elif num_fields == 4:
-        trajectory.gen_speeds()
+
+    trajectory.gen_speeds()
+    if num_fields == 3 or force_heading_interpolation:
+        trajectory.gen_headings(mode=heading_interpolation_mode)
 
     return trajectory
 

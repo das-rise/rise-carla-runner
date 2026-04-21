@@ -159,6 +159,11 @@ def parse_arguments():
         help="Force heading interpolation even when heading data is present.",
     )
     parser.add_argument(
+        "--mapmatch",
+        action="store_true",
+        help="Snap trajectory points to the nearest road using the Carla map.",
+    )
+    parser.add_argument(
         "--use-dataprov",
         action="store_true",
         help="Use dataprov library to create a provenance chain for the conversion",
@@ -251,7 +256,7 @@ def main() -> None:
     for file in args.trajectory_filepaths:
         try:
             vehicle_name = os.path.basename(file).split(".")[0]
-            trajectories_list.append((process_trajectory_file(file, heading_interpolation_mode=args.heading_interpolation_mode, force_heading_interpolation=args.force_heading_interpolation), vehicle_name))
+            trajectories_list.append((process_trajectory_file(file, heading_interpolation_mode=args.heading_interpolation_mode, force_heading_interpolation=args.force_heading_interpolation, mapmatch=args.mapmatch, world=world), vehicle_name))
         except Exception as e:
             logging.warning(
                 f"Got exception <<{e}>> upon processing trajectory file {file}. Skipping...",

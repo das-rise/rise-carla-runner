@@ -19,6 +19,8 @@ from rirun.utils.bling import rirun
 from rirun.utils.carla_tools import load_map
 from rirun.utils.spinner import Spinner
 from rirun.utils.video_tools import StreamingCamera
+import random
+import numpy as np
 
 # Helper functions
 
@@ -395,7 +397,7 @@ def main() -> None:
     os.makedirs(args.output_dir + "/traj", exist_ok=True)
 
     # Connect to Carla server
-    client = carla.Client(carla_host, carla_ip)
+    client = carla.Client(carla_host, carla_port)
     world = load_map(client, args.map_filepath)
     if world is None:
         world = client.get_world()

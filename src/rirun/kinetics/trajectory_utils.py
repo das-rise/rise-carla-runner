@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import carla
 
 
-def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str = "straight", force_heading_interpolation: bool = False) -> Trajectory:
+def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str = "straight", force_heading_interpolation: bool = False, mapmatch: bool = False, world: carla.World = None) -> Trajectory:
     """Process a trajectory file and return a Trajectory object.
 
     A trajectory file is expected to be a CSV file containing lines with three to five comma-separated values:
@@ -37,11 +37,41 @@ def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str
     trajectory = Trajectory(bare_route)
     trajectory.apply_carla_coord_conversion()
 
+    if mapmatch:
+        if world is None:
+            raise ValueError("World must be provided for map-matching.")
+        trajectory = _mapmatch_trajectory(trajectory, world)
+
     trajectory.gen_speeds()
     if num_fields == 3 or force_heading_interpolation:
         trajectory.gen_headings(mode=heading_interpolation_mode)
 
     return trajectory
+
+
+def _mapmatch_trajectory(trajectory: Trajectory, world: carla.World) -> Trajectory:
+    """Map-match a trajectory to the road network using the Carla map extracted from the world.
+
+    Args:
+        trajectory (Trajectory): The input trajectory to be map-matched.
+        world (carla.World): The Carla world used for map-matching.
+
+    Returns:
+        Trajectory: A new Trajectory object with points adjusted to align with the road network.
+    """
+    carla_map = world.get_map()
+    projected_route = []
+    for pt in trajectory.get_trajectory():
+        wp = carla_map.get_waypoint(carla.Location(x=pt.x, y=pt.y, z=0))
+        projected_route.append((
+            wp.transform.location.x,
+            wp.transform.location.y,
+            pt.time,
+            wp.transform.rotation.yaw,
+        ))
+    new_trajectory = Trajectory(projected_route)
+    return new_trajectory
+
 
 
 def get_first_xml_waypoint(xml_path: str) -> CarlaTrajectoryPoint:

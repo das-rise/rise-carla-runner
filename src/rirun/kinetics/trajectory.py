@@ -268,7 +268,7 @@ class Trajectory:
                     dedup_y.append(self._y[i])
                     dedup_indices.append(i)
 
-            tck, u = interpolate.splprep([dedup_x, dedup_y], k=3, s=100)
+            tck, u = interpolate.splprep([dedup_x, dedup_y], k=3, s=1000)
             dx, dy = interpolate.splev(u, tck, der=1)
 
             # Compute headings for deduplicated points

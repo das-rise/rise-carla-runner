@@ -3,7 +3,13 @@ import xml.etree.ElementTree as ET
 import carla
 
 
-def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str = "straight", force_heading_interpolation: bool = False, mapmatch: bool = False, world: carla.World = None) -> Trajectory:
+def process_trajectory_file(
+    trajectory_filepath,
+    heading_interpolation_mode: str = "straight",
+    force_heading_interpolation: bool = False,
+    mapmatch: bool = False,
+    world: carla.World = None,
+) -> Trajectory:
     """Process a trajectory file and return a Trajectory object.
 
     A trajectory file is expected to be a CSV file containing lines with three to five comma-separated values:
@@ -59,19 +65,70 @@ def _mapmatch_trajectory(trajectory: Trajectory, world: carla.World) -> Trajecto
     Returns:
         Trajectory: A new Trajectory object with points adjusted to align with the road network.
     """
+
+    ADAPTIVE_MODE = True
+    DISTANCE_OFFSET = 1.5  # should be roughly half the width of a car
+
     carla_map = world.get_map()
     projected_route = []
-    for pt in trajectory.get_trajectory():
-        wp = carla_map.get_waypoint(carla.Location(x=pt.x, y=pt.y, z=0))
-        projected_route.append((
-            wp.transform.location.x,
-            wp.transform.location.y,
-            pt.time,
-            wp.transform.rotation.yaw,
-        ))
+    for trajectory_point in trajectory.get_trajectory():
+        center_wp = carla_map.get_waypoint(
+            carla.Location(x=trajectory_point.x, y=trajectory_point.y, z=0)
+        )
+        if ADAPTIVE_MODE:
+            center_loc = center_wp.transform.location
+            lane_width = center_wp.lane_width
+            traj_point_loc = carla.Location(
+                x=trajectory_point.x, y=trajectory_point.y, z=0
+            )
+            distance_vector = center_loc - traj_point_loc
+            distance_threshold = max(lane_width / 2 - DISTANCE_OFFSET, 0)
+
+            next_lane_candidate = (
+                center_loc - distance_vector.make_unit_vector() * lane_width
+            )  # at this location, a neighboring lane could be located
+
+            # perform mapmatching only if the car is too close to the lane boundary and there is no lane for the car to cross into
+            if (
+                distance_vector.length()
+                >= distance_threshold  # car too close to lane shoulder
+                and not carla_map.get_waypoint(  # function returns none if there is no lane at that waypoint
+                    next_lane_candidate, project_to_road=False
+                )
+            ):
+                # project the actual trajectory point to DISTANCE_THRESHOLD meters from the center waypoint in the direction of the trajectory point
+                mapmatched_loc = (
+                    center_loc - distance_threshold * distance_vector.make_unit_vector()
+                )
+                projected_route.append(
+                    (
+                        mapmatched_loc.x,
+                        mapmatched_loc.y,
+                        trajectory_point.time,
+                        center_wp.transform.rotation.yaw,
+                    )
+                )
+            else:
+                projected_route.append(
+                    (
+                        trajectory_point.x,
+                        trajectory_point.y,
+                        trajectory_point.time,
+                        trajectory_point.heading,
+                    )
+                )
+
+        else:
+            projected_route.append(
+                (
+                    center_wp.transform.location.x,
+                    center_wp.transform.location.y,
+                    trajectory_point.time,
+                    center_wp.transform.rotation.yaw,
+                )
+            )
     new_trajectory = Trajectory(projected_route)
     return new_trajectory
-
 
 
 def get_first_xml_waypoint(xml_path: str) -> CarlaTrajectoryPoint:

@@ -19,7 +19,6 @@ class TrajectoryPoint(NamedTuple):
 
 
 class Trajectory:
-
     def __init__(self, bare_route: List[Tuple]) -> None:
         """
         Create an instance of Trajectory containing a bare route.
@@ -117,9 +116,9 @@ class Trajectory:
         Args:
             headings (List[carla.Rotation]): The current heading in the trajectory
         """
-        assert (
-            len(headings) == self._len_trajectory
-        ), f"Number of headings [{len(headings)}] does not equal length of trajectory [{self._len_trajectory}]"
+        assert len(headings) == self._len_trajectory, (
+            f"Number of headings [{len(headings)}] does not equal length of trajectory [{self._len_trajectory}]"
+        )
         self._h = []
         for h in headings:
             self._h.append(h)
@@ -132,9 +131,9 @@ class Trajectory:
         Args:
             speeds (List[float]): The current speed in the trajectory in km/h
         """
-        assert (
-            len(speeds) == self._len_trajectory
-        ), f"Number of headings [{len(speeds)}] does not equal length of trajectory [{self._len_trajectory}]"
+        assert len(speeds) == self._len_trajectory, (
+            f"Number of headings [{len(speeds)}] does not equal length of trajectory [{self._len_trajectory}]"
+        )
         self._s = []
         for s in speeds:
             self._s.append(s)
@@ -184,13 +183,15 @@ class Trajectory:
 
         self.add_speeds(speeds)
 
-    def gen_headings(self, mode: str="straight") -> None:
+    def gen_headings(self, mode: str = "straight") -> None:
         """
         Generate the headings by calculating them from the bare route.
         Args:
             mode (str): The mode to use for heading generation. "straight" (default): Calculate headings based on the angle between the current and the next trajectory point. "spline": Create a spline curve over the trajectory to generate heading angles.
         """
-        assert mode in ["straight", "spline"], f"Invalid mode {mode} for heading generation. Expected 'straight' or 'spline'."
+        assert mode in ["straight", "spline"], (
+            f"Invalid mode {mode} for heading generation. Expected 'straight' or 'spline'."
+        )
 
         if mode == "straight":
 
@@ -201,7 +202,9 @@ class Trajectory:
                 vector = [x2 - x1, y2 - y1]
                 vector_len = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
                 unit = [1, 0]
-                angle_rad = acos((vector[0] * unit[0] + vector[1] * unit[1]) / vector_len)
+                angle_rad = acos(
+                    (vector[0] * unit[0] + vector[1] * unit[1]) / vector_len
+                )
                 angle_deg = angle_rad * 180 / pi
                 if vector[1] < 0:  # correct for vectors in the left half plane
                     angle_deg = 360 - angle_deg
@@ -268,7 +271,7 @@ class Trajectory:
                     dedup_y.append(self._y[i])
                     dedup_indices.append(i)
 
-            tck, u = interpolate.splprep([dedup_x, dedup_y], k=3, s=1000)
+            tck, u = interpolate.splprep([dedup_x, dedup_y], k=3, s=100)
             dx, dy = interpolate.splev(u, tck, der=1)
 
             # Compute headings for deduplicated points
@@ -290,8 +293,6 @@ class Trajectory:
                     headings[i] = headings[i - 1]
 
             self.add_headings(headings)
-
-
 
     def plot(self, world: carla.World) -> None:
         """

@@ -43,6 +43,15 @@ class LaneWidth:
 
 
 @dataclass
+class LaneOffset:
+    s: float
+    a: float
+    b: float
+    c: float
+    d: float
+
+
+@dataclass
 class LaneLink:
     predecessor: Optional[int]  # lane id, or None if absent
     successor:   Optional[int]
@@ -91,6 +100,7 @@ class Road:
     length: float
     geometries: List[GeomPrimitive]
     lane_sections: List[LaneSection]
+    lane_offsets: List[LaneOffset] = field(default_factory=list)
     link: Optional[RoadLink] = None
 
     @property
@@ -232,8 +242,14 @@ def parse(filepath: str) -> List[Road]:
 
         # Lane sections
         lane_sections = []
+        lane_offsets = []
         lanes_elem = road_elem.find('lanes')
         if lanes_elem is not None:
+            for lo_elem in lanes_elem.findall('laneOffset'):
+                lane_offsets.append(LaneOffset(
+                    _f(lo_elem, 's'), _f(lo_elem, 'a'),
+                    _f(lo_elem, 'b'), _f(lo_elem, 'c'), _f(lo_elem, 'd')
+                ))
             for ls_elem in lanes_elem.findall('laneSection'):
                 ls_s  = _f(ls_elem, 's')
                 left  = []
@@ -246,7 +262,7 @@ def parse(filepath: str) -> List[Road]:
                 lane_sections.append(LaneSection(ls_s, left, right))
 
         roads.append(Road(road_id, junction, length, geometries, lane_sections,
-                          link=_parse_road_link(road_elem)))
+                          lane_offsets=lane_offsets, link=_parse_road_link(road_elem)))
 
     junctions = [
         _parse_junction(elem)

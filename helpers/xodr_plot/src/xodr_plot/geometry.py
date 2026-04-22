@@ -4,6 +4,7 @@ and computes filled lane polygons + boundary lines.
 """
 
 import numpy as np
+import math
 
 
 # ── Geometry primitive samplers ───────────────────────────────────────────────
@@ -142,6 +143,19 @@ def _sample_geom_at(g, t):
 
 
 # ── Lane width helper ─────────────────────────────────────────────────────────
+
+def _offset_at(road, s_in_road: float) -> float:
+    """Evaluate lane offset polynomial at s_in_road."""
+    if not hasattr(road, 'lane_offsets') or not road.lane_offsets:
+        return 0.0
+    active = road.lane_offsets[0]
+    for lo in road.lane_offsets:
+        if lo.s <= s_in_road:
+            active = lo
+        else:
+            break
+    ds = s_in_road - active.s
+    return active.a + active.b*ds + active.c*(ds**2) + active.d*(ds**3)
 
 def _width_at(lane, s_in_section):
     """Evaluate lane width polynomial at s_in_section (distance from section start)."""

@@ -289,6 +289,95 @@ def parse_arguments():
     return args
 
 
+def log_simulation_provenance(run_start_time: str, args: argparse.Namespace, start_ts: str) -> None:
+    """Log simulation provenance using the dataprov library.
+
+    Creates a provenance chain capturing inputs, outputs, tool metadata, and
+    runtime environment, then saves it as a JSON file in the output directory.
+
+    Args:
+        run_start_time: ISO 8601 timestamp string marking when the simulation started.
+        args: Parsed command-line arguments containing simulation configuration.
+        start_ts: Timestamp string used to identify output files for this run.
+    """
+    from dataprov import ProvenanceChain
+    from importlib.metadata import metadata, PackageNotFoundError
+    import hashlib
+
+    unique_hash = hashlib.sha256(
+            (str(vars(args)) + str(time.time_ns())).encode()
+        ).hexdigest()
+    tool_name = "rirun"
+    try:
+        meta = metadata(tool_name)
+        tool_version = meta["Version"]
+    except PackageNotFoundError:
+        tool_version = "unknown"
+    entity_id = tool_name + "_" + unique_hash[:8]
+
+    if args.dataprov_input_provenance_files:
+        input_provenance_files = args.dataprov_input_provenance_files
+    else:
+        input_provenance_files = None
+
+    mode_string = "real trajectories" if args.trajectory_filepaths else ""
+    mode_string += (
+            " and autonomous agents"
+            if args.pcla_agent and mode_string
+            else "autonomous agents"
+            if args.pcla_agent
+            else ""
+        )
+
+    raw_inputs = []
+    raw_input_formats = []
+
+    if args.trajectory_filepaths:
+        raw_inputs.extend(args.trajectory_filepaths)
+        raw_input_formats.extend(["CSV"] * len(args.trajectory_filepaths))
+
+    if args.map_filepath:
+        raw_inputs.append(args.map_filepath)
+        raw_input_formats.append("OpenDrive/Carla map")
+
+    if args.pcla_route:
+        raw_inputs.append(args.pcla_route)
+        raw_input_formats.append("XML")
+
+    inputs = raw_inputs
+    input_formats = raw_input_formats
+    chain = ProvenanceChain.create(
+            entity_id=entity_id,
+            initial_source=args.trajectory_filepaths,
+            description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
+            tags=[
+                "RIRUN",
+                "trajectory",
+                "Synergies",
+            ],
+        )
+
+    chain.add(
+            started_at=run_start_time,
+            ended_at=timestamp_now_dataprov(),
+            tool_name=tool_name,
+            tool_version=tool_version,
+            arguments=" ".join(sys.argv[1:]),
+            operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
+            inputs=inputs,
+            input_formats=input_formats,
+            outputs=[
+                args.output_dir + f"/traj/traj_{start_ts}.parquet",
+                args.output_dir + f"/camera/camera_{start_ts}.mp4",
+            ],
+            output_formats=["Parquet", "MP4"],
+            input_provenance_files=input_provenance_files,
+            capture_environment=True,
+        )
+
+    chain.save(f"{args.output_dir}/{entity_id}_prov.json")
+
+
 def main() -> None:
     run_start_time = timestamp_now_dataprov()
 
@@ -629,86 +718,12 @@ def main() -> None:
 
         # Destroy all remaining spawned vehicles
         try:
-            for v in active_vehicles:
-                v.desttro()
-        except Exception as e:
-            logging.warning(f"Error during vehicle cleanup: {e}", exc_info=True)
+            [v.destroy() for v in active_vehicles]
+        except UnboundLocalError as e:
+            pass
 
         if args.use_dataprov:
-            from dataprov import ProvenanceChain
-            from importlib.metadata import metadata, PackageNotFoundError
-            import hashlib
-
-            unique_hash = hashlib.sha256(
-                (str(vars(args)) + str(time.time_ns())).encode()
-            ).hexdigest()
-            tool_name = "rirun"
-            try:
-                meta = metadata(tool_name)
-                tool_version = meta["Version"]
-            except PackageNotFoundError:
-                tool_version = "unknown"
-            entity_id = tool_name + "_" + unique_hash[:8]
-
-            if args.dataprov_input_provenance_files:
-                input_provenance_files = args.dataprov_input_provenance_files
-            else:
-                input_provenance_files = None
-
-            mode_string = "real trajectories" if args.npc_trajectory_filepaths else ""
-            mode_string += (
-                " and autonomous agents"
-                if args.ego_agent and mode_string
-                else "autonomous agents"
-                if args.ego_agent
-                else ""
-            )
-
-            raw_inputs = []
-            raw_input_formats = []
-
-            if args.npc_trajectory_filepaths:
-                raw_inputs.extend(args.npc_trajectory_filepaths)
-                raw_input_formats.extend(["CSV"] * len(args.npc_trajectory_filepaths))
-
-            if args.map_filepath:
-                raw_inputs.append(args.map_filepath)
-                raw_input_formats.append("OpenDrive/Carla map")
-
-            if args.ego_route_filepath:
-                raw_inputs.append(args.ego_route_filepath)
-                raw_input_formats.append("XML")
-
-            inputs = raw_inputs
-            input_formats = raw_input_formats
-            chain = ProvenanceChain.create(
-                entity_id=entity_id,
-                initial_source=args.npc_trajectory_filepaths,
-                description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
-                tags=[
-                    "RIRUN",
-                    "trajectory",
-                    "Synergies",
-                ],
-            )
-
-            chain.add(
-                started_at=run_start_time,
-                ended_at=timestamp_now_dataprov(),
-                tool_name=tool_name,
-                tool_version=tool_version,
-                arguments=" ".join(sys.argv[1:]),
-                operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
-                inputs=inputs,
-                input_formats=input_formats,
-                outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
-                    + [f"{args.output_dir}/camera_{_mode}_{start_ts}.mp4" for _mode in _record_modes],
-                output_formats=["Parquet"] + ["MP4"] * len(_record_modes),
-                input_provenance_files=input_provenance_files,
-                capture_environment=True,
-            )
-
-            chain.save(f"{args.output_dir}/{entity_id}_prov.json")
+            log_simulation_provenance(run_start_time, args, start_ts)
 
         if success:
             logging.info("Simulation completed successfully.")

@@ -1,15 +1,16 @@
+import atexit
 import logging
 import os
-from datetime import datetime
-from typing import Tuple, Optional, List
-import pygame
-import numpy as np
-import carla
-import cv2
 import queue
 import threading
-import atexit
 import time
+from datetime import datetime
+from typing import List, Optional, Tuple
+
+import carla
+import cv2
+import numpy as np
+
 from rirun.kinetics.vehicle_tools import Actor
 
 

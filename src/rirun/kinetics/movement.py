@@ -337,7 +337,6 @@ class TeleportMovement(MovementPolicy):
             return
 
         else:
-
             # Place vehicle exactly at the time-aligned trajectory point.
             actor.get_actor().set_transform(curr_traj_trafo)
 
@@ -368,8 +367,12 @@ class TeleportMovement(MovementPolicy):
 
 
 class PCLA_Movement(MovementPolicy):
-
-    def __init__(self, pcla_agent: PCLA_Agent, client: carla.Client, spawn_timepoint: float = -1.0) -> None:
+    def __init__(
+        self,
+        pcla_agent: PCLA_Agent,
+        client: carla.Client,
+        spawn_timepoint: float = -1.0,
+    ) -> None:
         """
         Initialize the PCLA_Movement policy.
 
@@ -430,7 +433,9 @@ class PCLA_Movement(MovementPolicy):
         # Check after get_action (which updates the route planner) if route is done
         if self._pcla.route_completed:
             ego_action = carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
-            logging.info(f"{actor.name}: reached end of trajectory (`self._pcla.route_completed`). Stopping.")
+            logging.info(
+                f"{actor.name}: reached end of trajectory (`self._pcla.route_completed`). Stopping."
+            )
             self._route_completed_logged = True
 
         actor.get_actor().apply_control(ego_action)

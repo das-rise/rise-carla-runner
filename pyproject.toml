@@ -65,7 +65,10 @@ packages = { find = { where = ["src"] } }
 
 [tool.ruff]
 target-version = "py38"
+<<<<<<< HEAD
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+=======
+>>>>>>> 3622fd0 (remove duplicated dependency)

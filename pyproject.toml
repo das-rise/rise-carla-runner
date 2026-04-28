@@ -40,7 +40,6 @@ dependencies = [
   "filterpy==1.4.5",
   "rdp==0.8",
   "dataprov>=3.2",
-  "scipy",
   "xodr-plot @ file:helpers/xodr_plot",
 ]
 

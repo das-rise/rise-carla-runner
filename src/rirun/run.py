@@ -204,10 +204,10 @@ def main() -> None:
 
     if not args.carla_address:
         carla_host = "localhost"
-        carla_ip = 2000
+        carla_port = 2000
     else:
         carla_host = args.carla_address.split(":")[0]
-        carla_ip = int(args.carla_address.split(":")[1])
+        carla_port = int(args.carla_address.split(":")[1])
 
     rirun()
 
@@ -221,7 +221,7 @@ def main() -> None:
     os.makedirs(args.output_dir + "/traj", exist_ok=True)
 
     # Connect to Carla server
-    client = carla.Client(carla_host, carla_ip)
+    client = carla.Client(carla_host, carla_port)
     load_map(client, args.map_filepath)
     world = client.reload_world()
 
@@ -404,7 +404,10 @@ def main() -> None:
         spinner.stop()
 
         # Destroy all remaining active vehicles
-        [v.destroy() for v in active_vehicles]
+        try:
+            [v.destroy() for v in active_vehicles]
+        except Exception as e:
+            logging.warning(f"Error during vehicle cleanup: {e}", exc_info=True)
 
         if args.use_dataprov:
             from dataprov import ProvenanceChain

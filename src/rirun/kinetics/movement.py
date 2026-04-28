@@ -1,4 +1,4 @@
-from rirun.kinetics.stats import Statistic
+from rirun.kinetics.stats import Statistic, Average_Distance_True
 from rirun.kinetics.actor import Actor
 from rirun.PCLA.PCLA_agents import PCLA_Agent
 import math
@@ -84,7 +84,7 @@ class PIDMovement(MovementPolicy):
 
         if (
             deviation_statistics is not None
-            and deviation_statistics.__class__.__name__ != "Average_Distance_True"
+            and not isinstance(deviation_statistics, Average_Distance_True)
         ):
             raise Exception(
                 "Only Average_Distance_True statistic is currently supported for PIDMovement. "
@@ -194,7 +194,7 @@ class PIDMovementTimestampAdvanced(PIDMovement):
 
         if (
             deviation_statistics is not None
-            and deviation_statistics.__class__.__name__ != "Average_Distance_True"
+            and not isinstance(deviation_statistics, Average_Distance_True)
         ):
             raise Exception(
                 "Only Average_Distance_True statistic is currently supported for PIDMovement. "
@@ -296,7 +296,7 @@ class TeleportMovement(MovementPolicy):
 
         if (
             deviation_statistics is not None
-            and deviation_statistics.__class__.__name__ != "Average_Distance_True"
+            and not isinstance(deviation_statistics, Average_Distance_True)
         ):
             raise Exception(
                 "Only Average_Distance_True statistic is currently supported for PIDMovement. "
@@ -331,7 +331,6 @@ class TeleportMovement(MovementPolicy):
             actor.get_actor().set_transform(curr_traj_trafo)
 
             # Convert km/h to m/s and set a velocity vector aligned with yaw.
-            # TODO: check whether this simly needs to convert to kmh!
             speed_ms = float(curr_traj_speed) / 3.6
             yaw_rad = math.radians(curr_traj_trafo.rotation.yaw)
             vx = math.cos(yaw_rad) * speed_ms

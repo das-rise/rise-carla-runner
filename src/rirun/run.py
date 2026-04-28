@@ -161,7 +161,7 @@ def parse_arguments():
     parser.add_argument(
         "--mapmatch",
         action="store_true",
-        help="Snap trajectory points to the nearest road using the Carla map.",
+        help="Clamp trajectory points to the road/lane boundary using the Carla map when they are within the matching threshold; otherwise keep the original points.",
     )
     parser.add_argument(
         "--use-dataprov",

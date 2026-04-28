@@ -271,6 +271,7 @@ class TeleportMovement(MovementPolicy):
         """
         curr_point = actor.get_current_trajectory_point()
 
+<<<<<<< HEAD
         # Place vehicle exactly at the time-aligned trajectory point.
         actor.get_actor().set_transform(curr_point.transform)
 
@@ -287,6 +288,67 @@ class TeleportMovement(MovementPolicy):
             )
 
         self._advance_or_finish(actor, simulation_time, deviation_statistics)
+=======
+        if (
+            deviation_statistics is not None
+            and not isinstance(deviation_statistics, Average_Distance_True)
+        ):
+            raise Exception(
+                "Only Average_Distance_True statistic is currently supported for PIDMovement. "
+                f"Provided statistic: {deviation_statistics.__class__.__name__}"
+            )
+
+        def _pass_point_to_stats(point: CarlaTrajectoryPoint) -> None:
+            # feed the actual trajectory point to the statistics
+            if deviation_statistics is not None:
+                deviation_statistics.add(point)
+
+        curr_traj_time = actor.get_current_trajectory_point().time
+        curr_traj_trafo = actor.get_current_trajectory_point().transform
+        curr_traj_speed = actor.get_current_trajectory_point().speed
+
+        if not actor.is_spawned():
+            # check if it is time to spawn the actor
+            if simulation_time >= curr_traj_time - self._temporal_trigger:
+                logging.info(
+                    f"{actor.name}: trying spawn at sim time {simulation_time}, traj time {curr_traj_time}, temporal trigger {self._temporal_trigger}"
+                )
+                actor.spawn()
+                _pass_point_to_stats(actor.get_current_trajectory_point())
+                return
+
+        elif self._traversed_trajectory:
+            # return immediately if whole trajectory has been traversed
+            return
+
+        else:
+            # Place vehicle exactly at the time-aligned trajectory point.
+            actor.get_actor().set_transform(curr_traj_trafo)
+
+            # Convert km/h to m/s and set a velocity vector aligned with yaw.
+            speed_ms = float(curr_traj_speed) / 3.6
+            yaw_rad = math.radians(curr_traj_trafo.rotation.yaw)
+            vx = math.cos(yaw_rad) * speed_ms
+            vy = math.sin(yaw_rad) * speed_ms
+            speed_vector = carla.Vector3D(vx, vy, 0)
+            actor.get_actor().set_target_velocity(speed_vector)
+
+            if deviation_statistics is not None:
+                deviation_statistics.add(
+                    (actor.get_actor().get_transform(), simulation_time)
+                )
+
+            try:
+                actor.advance_trajectory()
+                _pass_point_to_stats(actor.get_current_trajectory_point())
+            except StopIteration:
+                logging.info(
+                    f"{actor.name}: reached end of trajectory at sim time {simulation_time}"
+                )
+                actor.destroy()
+                self._traversed_trajectory = True
+                return
+>>>>>>> c943a75 (check by class instance, not class name)
 
 
 class PCLA_Movement(MovementPolicy):

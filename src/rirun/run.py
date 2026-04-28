@@ -404,7 +404,8 @@ def main() -> None:
         adjusted_elapsed_sim_seconds = args.offset_time
 
         # step vehicles once to spawn those that spawn at the start
-        [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
+        for v in vehicles:
+            v.step(adjusted_elapsed_sim_seconds)
 
         ## CAMERA
 
@@ -441,7 +442,8 @@ def main() -> None:
             adjusted_elapsed_sim_seconds = (
                 snapshot.timestamp.elapsed_seconds - start_time + args.offset_time
             )
-            [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
+            for v in vehicles:
+                v.step(adjusted_elapsed_sim_seconds)
             active_vehicles = [
                 v for v in vehicles if not v._destroyed and v.is_spawned()
             ]
@@ -481,7 +483,8 @@ def main() -> None:
 
         # Destroy all remaining active vehicles
         try:
-            [v.destroy() for v in active_vehicles]
+            for v in active_vehicles:
+                v.destroy()
         except UnboundLocalError:
             pass
 

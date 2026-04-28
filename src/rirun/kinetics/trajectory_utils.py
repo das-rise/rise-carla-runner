@@ -21,6 +21,8 @@ def process_trajectory_file(
         trajectory_filepath (str): The filepath to the trajectory file.
         heading_interpolation_mode (str): The mode to use for heading generation. "straight" (default): Calculate headings based on the angle between the current and the next trajectory point. "spline": Create a spline curve over the trajectory to generate heading angles.
         force_heading_interpolation (bool): If True, forces heading interpolation even if the trajectory file contains heading information. Default is False.
+        mapmatch (bool): If True, project trajectory points onto the road network using the Carla map from ``world``. Default is False.
+        world (carla.World): The Carla world used for map-matching. Must be provided when ``mapmatch`` is True. Default is None.
 
     Returns:
         Trajectory: A processed Trajectory object.

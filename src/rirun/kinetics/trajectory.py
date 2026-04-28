@@ -1,6 +1,8 @@
+from math import acos, pi, sqrt
+from typing import Generator, List, NamedTuple, Tuple
+
 import carla
-from typing import Tuple, List, Generator, NamedTuple
-from math import sqrt, acos, pi
+
 from rirun.utils import carla_tools
 
 
@@ -132,7 +134,7 @@ class Trajectory:
             speeds (List[float]): The current speed in the trajectory in km/h
         """
         assert len(speeds) == self._len_trajectory, (
-            f"Number of headings [{len(speeds)}] does not equal length of trajectory [{self._len_trajectory}]"
+            f"Number of speeds [{len(speeds)}] does not equal length of trajectory [{self._len_trajectory}]"
         )
         self._s = []
         for s in speeds:

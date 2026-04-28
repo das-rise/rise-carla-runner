@@ -1,23 +1,24 @@
 import argparse
+import logging
+import math
 import os
-import time
-from datetime import datetime, timezone
-from rich_argparse import RichHelpFormatter
 import signal
 import sys
-import logging
-import subprocess
+import time
+from datetime import datetime, timezone
+
 import carla
-from rirun.kinetics.vehicle_tools import Vehicle
+from rich_argparse import RichHelpFormatter
+from traj_convert.carla2traj import Carla2Traj
+
 from rirun.kinetics.movement import PCLA_Movement
 from rirun.kinetics.trajectory_utils import process_trajectory_file
-from rirun.utils.video_tools import StreamingCamera
-from rirun.utils.spinner import Spinner
-from rirun.utils.bling import rirun
-import math
+from rirun.kinetics.vehicle_tools import Vehicle
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
-from traj_convert.carla2traj import Carla2Traj
+from rirun.utils.bling import rirun
 from rirun.utils.carla_tools import load_map
+from rirun.utils.spinner import Spinner
+from rirun.utils.video_tools import StreamingCamera
 
 # Helper functions
 
@@ -41,23 +42,6 @@ def signal_handler(sig: signal.Signals, frame) -> None:
     """
     cleanup(sig)
     sys.exit(1)
-
-
-def execute(bash_str: str) -> None:
-    """
-    Execute given string as process.
-    Args:
-        bash_str (str): The command to execute.
-    """
-    try:
-        logging.info(f"Calling '{bash_str}'")
-        bash_str_list = bash_str.split(" ")
-        result = subprocess.run(
-            bash_str_list, check=True, capture_output=True, text=True
-        )
-        logging.info(f"Output:\n{result.stdout}")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error when running: {e}")
 
 
 def parse_arguments():
@@ -197,7 +181,9 @@ def parse_arguments():
     return args
 
 
-def log_simulation_provenance(run_start_time: str, args: argparse.Namespace, start_ts: str) -> None:
+def log_simulation_provenance(
+    run_start_time: str, args: argparse.Namespace, start_ts: str
+) -> None:
     """Log simulation provenance using the dataprov library.
 
     Creates a provenance chain capturing inputs, outputs, tool metadata, and
@@ -208,13 +194,14 @@ def log_simulation_provenance(run_start_time: str, args: argparse.Namespace, sta
         args: Parsed command-line arguments containing simulation configuration.
         start_ts: Timestamp string used to identify output files for this run.
     """
-    from dataprov import ProvenanceChain
-    from importlib.metadata import metadata, PackageNotFoundError
     import hashlib
+    from importlib.metadata import PackageNotFoundError, metadata
+
+    from dataprov import ProvenanceChain
 
     unique_hash = hashlib.sha256(
-            (str(vars(args)) + str(time.time_ns())).encode()
-        ).hexdigest()
+        (str(vars(args)) + str(time.time_ns())).encode()
+    ).hexdigest()
     tool_name = "rirun"
     try:
         meta = metadata(tool_name)
@@ -230,12 +217,12 @@ def log_simulation_provenance(run_start_time: str, args: argparse.Namespace, sta
 
     mode_string = "real trajectories" if args.trajectory_filepaths else ""
     mode_string += (
-            " and autonomous agents"
-            if args.pcla_agent and mode_string
-            else "autonomous agents"
-            if args.pcla_agent
-            else ""
-        )
+        " and autonomous agents"
+        if args.pcla_agent and mode_string
+        else "autonomous agents"
+        if args.pcla_agent
+        else ""
+    )
 
     raw_inputs = []
     raw_input_formats = []
@@ -255,33 +242,33 @@ def log_simulation_provenance(run_start_time: str, args: argparse.Namespace, sta
     inputs = raw_inputs
     input_formats = raw_input_formats
     chain = ProvenanceChain.create(
-            entity_id=entity_id,
-            initial_source=args.trajectory_filepaths,
-            description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
-            tags=[
-                "RIRUN",
-                "trajectory",
-                "Synergies",
-            ],
-        )
+        entity_id=entity_id,
+        initial_source=args.trajectory_filepaths,
+        description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
+        tags=[
+            "RIRUN",
+            "trajectory",
+            "Synergies",
+        ],
+    )
 
     chain.add(
-            started_at=run_start_time,
-            ended_at=timestamp_now_dataprov(),
-            tool_name=tool_name,
-            tool_version=tool_version,
-            arguments=" ".join(sys.argv[1:]),
-            operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
-            inputs=inputs,
-            input_formats=input_formats,
-            outputs=[
-                args.output_dir + f"/traj/traj_{start_ts}.parquet",
-                args.output_dir + f"/camera/camera_{start_ts}.mp4",
-            ],
-            output_formats=["Parquet", "MP4"],
-            input_provenance_files=input_provenance_files,
-            capture_environment=True,
-        )
+        started_at=run_start_time,
+        ended_at=timestamp_now_dataprov(),
+        tool_name=tool_name,
+        tool_version=tool_version,
+        arguments=" ".join(sys.argv[1:]),
+        operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
+        inputs=inputs,
+        input_formats=input_formats,
+        outputs=[
+            args.output_dir + f"/traj/traj_{start_ts}.parquet",
+            args.output_dir + f"/camera/camera_{start_ts}.mp4",
+        ],
+        output_formats=["Parquet", "MP4"],
+        input_provenance_files=input_provenance_files,
+        capture_environment=True,
+    )
 
     chain.save(f"{args.output_dir}/{entity_id}_prov.json")
 
@@ -495,7 +482,7 @@ def main() -> None:
         # Destroy all remaining active vehicles
         try:
             [v.destroy() for v in active_vehicles]
-        except UnboundLocalError as e:
+        except UnboundLocalError:
             pass
 
         if args.use_dataprov:

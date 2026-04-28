@@ -51,7 +51,7 @@ def highlight_location(world: carla.World, loc: carla.Location) -> None:
 
     Args:
         world (carla.World): The world in which to draw the route
-        route (list): a list of Carla waypoints
+        loc (carla.Location): a location to highlight
     """
     world.debug.draw_point(loc, size=0.15, life_time=0, color=carla.Color(0, 255, 0))
 

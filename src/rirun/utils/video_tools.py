@@ -158,7 +158,10 @@ class StreamingCamera:
 
         if ego_vehicle:
             # tf = carla.Transform(carla.Location(x=0.0, y=0.0, z=1.5))
-            tf = carla.Transform(carla.Location(x=0.0, y=0.0, z=50.0), carla.Rotation(pitch=-90, yaw=0.0, roll=0))
+            tf = carla.Transform(
+                carla.Location(x=0.0, y=0.0, z=50.0),
+                carla.Rotation(pitch=-90, yaw=0.0, roll=0),
+            )
             target = ego_vehicle.get_actor()
         else:
             tf = carla.Transform(

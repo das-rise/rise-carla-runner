@@ -397,7 +397,7 @@ def main() -> None:
 
         if args.use_dataprov:
             from dataprov import ProvenanceChain
-            from importlib.metadata import metadata
+            from importlib.metadata import metadata, PackageNotFoundError
             import hashlib
 
             unique_hash = hashlib.sha256(
@@ -405,8 +405,6 @@ def main() -> None:
             ).hexdigest()
             tool_name = "rirun"
             try:
-                from importlib.metadata import PackageNotFoundError
-
                 meta = metadata(tool_name)
                 tool_version = meta["Version"]
             except PackageNotFoundError:

@@ -60,9 +60,9 @@ class Vehicle(Actor):
         self._blueprint = blueprint_library.filter(blueprint)[0]
 
         if isinstance(trajectory, Trajectory):
-            assert (
-                trajectory._has_headings and trajectory._has_speeds
-            ), f"Trajectory needs headings and speeds; has headings [{trajectory._has_headings}], speeds [{trajectory._has_speeds}]"
+            assert trajectory._has_headings and trajectory._has_speeds, (
+                f"Trajectory needs headings and speeds; has headings [{trajectory._has_headings}], speeds [{trajectory._has_speeds}]"
+            )
             self._trajectory_generator = trajectory.get_carla_trajectory()
             self._current_trajectory_point = next(self._trajectory_generator)
             self.first_trajectory_point = next(self._trajectory_generator)

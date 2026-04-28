@@ -131,9 +131,11 @@ def _load_from_carla_map(client: carla.Client, map_name: str) -> None:
     logging.info(f"Loading world from CARLA map {map_name}...")
     try:
         client.load_world(map_name)
-    except RuntimeError as e:
+    except RuntimeError:
         logging.error(f"Failed to load CARLA map {map_name}")
-        logging.error("Ensure that the map name is correct and the map is available server-side.")
+        logging.error(
+            "Ensure that the map name is correct and the map is available server-side."
+        )
         raise
 
 

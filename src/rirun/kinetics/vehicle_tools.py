@@ -63,9 +63,9 @@ class Vehicle(Actor):
             self._blueprint.set_attribute("role_name", role_name)
 
         if isinstance(trajectory, Trajectory):
-            assert (
-                trajectory._has_headings and trajectory._has_speeds
-            ), f"Trajectory needs headings and speeds; has headings [{trajectory._has_headings}], speeds [{trajectory._has_speeds}]"
+            assert trajectory._has_headings and trajectory._has_speeds, (
+                f"Trajectory needs headings and speeds; has headings [{trajectory._has_headings}], speeds [{trajectory._has_speeds}]"
+            )
             self._trajectory_generator = trajectory.get_carla_trajectory()
             self._current_trajectory_point = next(self._trajectory_generator)
             self.first_trajectory_point = next(self._trajectory_generator)

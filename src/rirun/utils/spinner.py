@@ -7,30 +7,30 @@ from itertools import cycle
 
 class SpinnerStdoutWrapper:
     """Wraps stdout to pause spinner on any write operation."""
-    
+
     def __init__(self, original_stdout, spinner):
         self.original_stdout = original_stdout
         self.spinner = spinner
         self._buffer = ""
-    
+
     def write(self, text):
         # Buffer the text until we see a newline or it's substantial
         self._buffer += text
-        
+
         # Check if we have a complete line or substantial content
-        if '\n' in self._buffer or len(self._buffer) > 100:
+        if "\n" in self._buffer or len(self._buffer) > 100:
             # Only pause/clear if there's actual content (not just empty strings or whitespace)
             content_to_write = self._buffer
             self._buffer = ""
-            
+
             if content_to_write.strip():
                 was_running = self.spinner.running and not self.spinner.paused
                 if was_running:
                     self.spinner.pause()
-                
+
                 self.original_stdout.write(content_to_write)
                 self.original_stdout.flush()
-                
+
                 if was_running:
                     # Small delay to ensure output is visible
                     time.sleep(0.02)
@@ -38,7 +38,7 @@ class SpinnerStdoutWrapper:
             else:
                 self.original_stdout.write(content_to_write)
                 self.original_stdout.flush()
-    
+
     def flush(self):
         # Flush any remaining buffer
         if self._buffer:
@@ -48,10 +48,10 @@ class SpinnerStdoutWrapper:
                 was_running = self.spinner.running and not self.spinner.paused
                 if was_running:
                     self.spinner.pause()
-                
+
                 self.original_stdout.write(content)
                 self.original_stdout.flush()
-                
+
                 if was_running:
                     time.sleep(0.02)
                     self.spinner.resume()
@@ -60,7 +60,7 @@ class SpinnerStdoutWrapper:
                 self.original_stdout.flush()
         else:
             self.original_stdout.flush()
-    
+
     def __getattr__(self, name):
         return getattr(self.original_stdout, name)
 
@@ -69,22 +69,22 @@ class SpinnerLogHandler(logging.Handler):
     """
     Custom logging handler that pauses the spinner during log output.
     """
-    
+
     def __init__(self, spinner, stream=None):
         super().__init__()
         self.spinner = spinner
         self.stream = stream or sys.stderr
-    
+
     def emit(self, record):
         """Pause spinner, emit log, resume spinner."""
         was_running = self.spinner.running and not self.spinner.paused
-        
+
         if was_running:
             self.spinner.pause()
-        
+
         try:
             msg = self.format(record)
-            self.stream.write(msg + '\n')
+            self.stream.write(msg + "\n")
             self.stream.flush()
         except Exception:
             self.handleError(record)
@@ -120,7 +120,9 @@ class Spinner:
                 with self._lock:
                     char = next(self.spinner_chars)
                     # Bold text using ANSI escape codes: \033[1m for bold, \033[0m to reset
-                    self._original_stdout.write(f"\r  {char} \033[1m{self.message}\033[0m")
+                    self._original_stdout.write(
+                        f"\r  {char} \033[1m{self.message}\033[0m"
+                    )
                     self._original_stdout.flush()
             time.sleep(0.1)
 
@@ -151,7 +153,7 @@ class Spinner:
         with self._lock:
             self._original_stdout.write("\r" + " " * (len(self.message) + 4) + "\r")
             self._original_stdout.flush()
-        
+
         # Restore original stdout
         if self._original_stdout:
             sys.stdout = self._original_stdout
@@ -162,7 +164,7 @@ class Spinner:
         """Temporarily pause the spinner and clear its line."""
         if not self.running or self.paused:
             return
-        
+
         self.paused = True
         with self._lock:
             # Account for 2 spaces prefix + spinner char + space + message (bold codes don't take visual space)
@@ -188,17 +190,17 @@ class Spinner:
                 self._original_stdout.write(f"\r  {char} \033[1m{self.message}\033[0m")
                 self._original_stdout.flush()
 
-    def setup_logging(self, level=logging.INFO, format='%(levelname)s: %(message)s'):
+    def setup_logging(self, level=logging.INFO, format="%(levelname)s: %(message)s"):
         """
         Convenience method to set up logging with the spinner-aware handler.
         Call this after creating the spinner but before starting it.
         """
         logger = logging.getLogger()
         logger.setLevel(level)
-        
+
         # Remove existing handlers
         logger.handlers.clear()
-        
+
         # Add spinner-aware handler
         handler = SpinnerLogHandler(self)
         handler.setFormatter(logging.Formatter(format))
@@ -218,32 +220,32 @@ class Spinner:
 if __name__ == "__main__":
     # Create spinner
     spinner = Spinner("Processing data")
-    
+
     # Set up logging BEFORE starting the spinner
-    spinner.setup_logging(level=logging.INFO, format='%(levelname)s: %(message)s')
-    
+    spinner.setup_logging(level=logging.INFO, format="%(levelname)s: %(message)s")
+
     # Start the spinner
     spinner.start()
-    
+
     # Mix spinner with print statements and logging
     time.sleep(1)
     print("This is a regular print statement")
     time.sleep(1)
     logging.info("This is a log message - works now!")
     time.sleep(1)
-    
+
     spinner.update_message("Loading files")
     time.sleep(1)
     print("Print during different spinner message")
     time.sleep(1)
     logging.warning("Warning message works too!")
     time.sleep(1)
-    
+
     print("Multiple")
     logging.info("Mixed")
     print("outputs")
     logging.error("All work together!")
     time.sleep(1)
-    
+
     spinner.stop()
     print("✓ All done!")

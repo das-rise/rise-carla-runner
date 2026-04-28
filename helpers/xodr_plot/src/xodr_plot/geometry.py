@@ -4,7 +4,6 @@ and computes filled lane polygons + boundary lines.
 """
 
 import numpy as np
-import math
 
 
 # ── Geometry primitive samplers ───────────────────────────────────────────────

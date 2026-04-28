@@ -20,7 +20,7 @@ if [ -d "$OSI_DIR" ]; then
 	rm -rf "$OSI_DIR"
 fi
 
-git clone git@git.ri.se:synergies/osi-gen.git "$OSI_DIR"
+git clone git@github.com:das-rise/osi-gen.git "$OSI_DIR"
 cd "$OSI_DIR"/python && "$CONDA" run -n "$ENV_NAME" "$PIP" install . || exit 1
 cd -
 rm -rf "$OSI_DIR"

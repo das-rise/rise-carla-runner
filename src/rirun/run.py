@@ -398,9 +398,14 @@ def main() -> None:
 
     # Connect to Carla server
     client = carla.Client(carla_host, carla_port)
+<<<<<<< HEAD
     world = load_map(client, args.map_filepath)
     if world is None:
         world = client.get_world()
+=======
+    load_map(client, args.map_filepath)
+    world = client.reload_world()
+>>>>>>> d70ad64 (catch potentially nonexisting active_vehicles)
 
     # Wait until the map is fully loaded
     timeout = 10.0  # seconds

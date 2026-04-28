@@ -198,7 +198,7 @@ def parse_arguments():
 
 
 def main() -> None:
-    start_time = timestamp_now_dataprov()
+    run_start_time = timestamp_now_dataprov()
 
     args = parse_arguments()
 
@@ -227,9 +227,9 @@ def main() -> None:
 
     # Wait until the map is fully loaded
     timeout = 10.0  # seconds
-    start_time = time.time()
+    map_start_time = time.time()
     while world.get_map() is None:
-        if time.time() - start_time > timeout:
+        if time.time() - map_start_time > timeout:
             raise RuntimeError("Map failed to load in time")
         time.sleep(0.1)
 
@@ -465,7 +465,7 @@ def main() -> None:
             )
 
             chain.add(
-                started_at=start_time,
+                started_at=run_start_time,
                 ended_at=timestamp_now_dataprov(),
                 tool_name=tool_name,
                 tool_version=tool_version,

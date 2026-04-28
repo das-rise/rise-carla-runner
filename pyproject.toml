@@ -63,9 +63,10 @@ dev = [
 [tool.setuptools]
 packages = { find = { where = ["src"] } }
 
-[tool.black]
-line-length = 88
-target-version = ["py38"]
-
 [tool.ruff]
 target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]   # pycodestyle errors/warnings, pyflakes, isort
+# "E", "F" are the Flake8 defaults — safe starting point
+# Drop "W" or add "B", "UP", etc. as desired

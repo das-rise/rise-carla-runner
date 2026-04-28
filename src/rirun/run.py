@@ -421,14 +421,23 @@ def main() -> None:
                 else ""
             )
 
-            raw_inputs = [*args.trajectory_filepaths, args.map_filepath, args.pcla_route]
-            raw_input_formats = ["CSV"] * len(args.trajectory_filepaths) if args.trajectory_filepaths else ["CSV"] 
-            raw_input_formats += ["OpenDrive/Carla map", "XML"]
-            inputs = [inp for inp in raw_inputs if inp]
-            input_formats = [
-                fmt for inp, fmt in zip(raw_inputs, raw_input_formats) if inp
-            ]
+            raw_inputs = []
+            raw_input_formats = []
 
+            if args.trajectory_filepaths:
+                raw_inputs.extend(args.trajectory_filepaths)
+                raw_input_formats.extend(["CSV"] * len(args.trajectory_filepaths))
+
+            if args.map_filepath:
+                raw_inputs.append(args.map_filepath)
+                raw_input_formats.append("OpenDrive/Carla map")
+
+            if args.pcla_route:
+                raw_inputs.append(args.pcla_route)
+                raw_input_formats.append("XML")
+
+            inputs = raw_inputs
+            input_formats = raw_input_formats
             chain = ProvenanceChain.create(
                 entity_id=entity_id,
                 initial_source=args.trajectory_filepaths,

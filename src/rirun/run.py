@@ -304,10 +304,10 @@ def main() -> None:
 
     if not args.carla_address:
         carla_host = "localhost"
-        carla_ip = 2000
+        carla_port = 2000
     else:
         carla_host = args.carla_address.split(":")[0]
-        carla_ip = int(args.carla_address.split(":")[1])
+        carla_port = int(args.carla_address.split(":")[1])
 
     rirun()
 
@@ -628,7 +628,11 @@ def main() -> None:
             _pg.quit()
 
         # Destroy all remaining spawned vehicles
-        [v.destroy() for v in vehicles if v.is_spawned() and not v._destroyed]
+        try:
+            for v in active_vehicles:
+                v.desttro()
+        except Exception as e:
+            logging.warning(f"Error during vehicle cleanup: {e}", exc_info=True)
 
         if args.use_dataprov:
             from dataprov import ProvenanceChain

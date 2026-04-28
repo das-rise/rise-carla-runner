@@ -404,7 +404,13 @@ def main() -> None:
                 (str(vars(args)) + str(time.time_ns())).encode()
             ).hexdigest()
             tool_name = "rirun"
-            meta = metadata(tool_name)
+            try:
+                from importlib.metadata import PackageNotFoundError
+
+                meta = metadata(tool_name)
+                tool_version = meta["Version"]
+            except PackageNotFoundError:
+                tool_version = "unknown"
             entity_id = tool_name + "_" + unique_hash[:8]
 
             if args.dataprov_input_provenance_files:
@@ -453,7 +459,7 @@ def main() -> None:
                 started_at=start_time,
                 ended_at=timestamp_now_dataprov(),
                 tool_name=tool_name,
-                tool_version=meta["Version"],
+                tool_version=tool_version,
                 arguments=" ".join(sys.argv[1:]),
                 operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
                 inputs=inputs,

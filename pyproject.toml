@@ -67,6 +67,5 @@ packages = { find = { where = ["src"] } }
 target-version = "py38"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]   # pycodestyle errors/warnings, pyflakes, isort
-# "E", "F" are the Flake8 defaults — safe starting point
-# Drop "W" or add "B", "UP", etc. as desired
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

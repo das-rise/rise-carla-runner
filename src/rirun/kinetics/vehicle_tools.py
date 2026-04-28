@@ -50,7 +50,6 @@ class Vehicle(Actor):
                 The vehicle blueprint to spawn, e.g., `"model3"`. Defaults to `"model3"`.
             deviation_statistics (Optional[str], optional):
                 Which trajectory deviation statistics to compute during the run. Can be:
-                - `"average_distance_interpolated"`: computes the average distance between the reference and interpolated position for all timestamps in a trajectory.
                 - `"average_distance_true"`: computes the average distance between the reference and true position for all timestamps in a trajectory.
                 Defaults to `None`.
         """
@@ -96,8 +95,6 @@ class Vehicle(Actor):
         # Deviation statistic
         if deviation_statistics is None:
             self._deviation_statistics = None
-        elif deviation_statistics == "average_distance_interpolated":
-            self._deviation_statistics
         elif deviation_statistics == "average_distance_true":
             self._deviation_statistics = Average_Distance_True()
         else:

@@ -1,12 +1,5 @@
 """
 Statistical analysis module for RiRun simulations.
-
-Provides classes for calculating vehicle trajectory statistics, including
-average distance between reference and interpolated positions.
-
-Classes:
-    Statistic: Abstract base class for statistical calculations
-    Average_Distance_Interpolated: Calculates average positional accuracy
 """
 
 from rirun.kinetics.trajectory import CarlaTrajectoryPoint

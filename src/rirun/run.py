@@ -159,6 +159,11 @@ def parse_arguments():
         help="Force heading interpolation even when heading data is present.",
     )
     parser.add_argument(
+        "--mapmatch",
+        action="store_true",
+        help="Clamp trajectory points to the road/lane boundary using the Carla map when they are within the matching threshold; otherwise keep the original points.",
+    )
+    parser.add_argument(
         "--use-dataprov",
         action="store_true",
         help="Use dataprov library to create a provenance chain for the conversion",
@@ -193,7 +198,7 @@ def parse_arguments():
 
 
 def main() -> None:
-    start_time = timestamp_now_dataprov()
+    run_start_time = timestamp_now_dataprov()
 
     args = parse_arguments()
 
@@ -222,9 +227,9 @@ def main() -> None:
 
     # Wait until the map is fully loaded
     timeout = 10.0  # seconds
-    start_time = time.time()
+    map_start_time = time.time()
     while world.get_map() is None:
-        if time.time() - start_time > timeout:
+        if time.time() - map_start_time > timeout:
             raise RuntimeError("Map failed to load in time")
         time.sleep(0.1)
 
@@ -251,7 +256,18 @@ def main() -> None:
     for file in args.trajectory_filepaths:
         try:
             vehicle_name = os.path.basename(file).split(".")[0]
-            trajectories_list.append((process_trajectory_file(file, heading_interpolation_mode=args.heading_interpolation_mode, force_heading_interpolation=args.force_heading_interpolation), vehicle_name))
+            trajectories_list.append(
+                (
+                    process_trajectory_file(
+                        file,
+                        heading_interpolation_mode=args.heading_interpolation_mode,
+                        force_heading_interpolation=args.force_heading_interpolation,
+                        mapmatch=args.mapmatch,
+                        world=world,
+                    ),
+                    vehicle_name,
+                )
+            )
         except Exception as e:
             logging.warning(
                 f"Got exception <<{e}>> upon processing trajectory file {file}. Skipping...",
@@ -392,14 +408,18 @@ def main() -> None:
 
         if args.use_dataprov:
             from dataprov import ProvenanceChain
-            from importlib.metadata import metadata
+            from importlib.metadata import metadata, PackageNotFoundError
             import hashlib
 
             unique_hash = hashlib.sha256(
                 (str(vars(args)) + str(time.time_ns())).encode()
             ).hexdigest()
             tool_name = "rirun"
-            meta = metadata(tool_name)
+            try:
+                meta = metadata(tool_name)
+                tool_version = meta["Version"]
+            except PackageNotFoundError:
+                tool_version = "unknown"
             entity_id = tool_name + "_" + unique_hash[:8]
 
             if args.dataprov_input_provenance_files:
@@ -416,14 +436,23 @@ def main() -> None:
                 else ""
             )
 
-            raw_inputs = [*args.trajectory_filepaths, args.map_filepath, args.pcla_route]
-            raw_input_formats = ["CSV"] * len(args.trajectory_filepaths) if args.trajectory_filepaths else ["CSV"] 
-            raw_input_formats += ["OpenDrive/Carla map", "XML"]
-            inputs = [inp for inp in raw_inputs if inp]
-            input_formats = [
-                fmt for inp, fmt in zip(raw_inputs, raw_input_formats) if inp
-            ]
+            raw_inputs = []
+            raw_input_formats = []
 
+            if args.trajectory_filepaths:
+                raw_inputs.extend(args.trajectory_filepaths)
+                raw_input_formats.extend(["CSV"] * len(args.trajectory_filepaths))
+
+            if args.map_filepath:
+                raw_inputs.append(args.map_filepath)
+                raw_input_formats.append("OpenDrive/Carla map")
+
+            if args.pcla_route:
+                raw_inputs.append(args.pcla_route)
+                raw_input_formats.append("XML")
+
+            inputs = raw_inputs
+            input_formats = raw_input_formats
             chain = ProvenanceChain.create(
                 entity_id=entity_id,
                 initial_source=args.trajectory_filepaths,
@@ -436,10 +465,10 @@ def main() -> None:
             )
 
             chain.add(
-                started_at=start_time,
+                started_at=run_start_time,
                 ended_at=timestamp_now_dataprov(),
                 tool_name=tool_name,
-                tool_version=meta["Version"],
+                tool_version=tool_version,
                 arguments=" ".join(sys.argv[1:]),
                 operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
                 inputs=inputs,

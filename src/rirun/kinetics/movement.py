@@ -365,7 +365,6 @@ class PCLA_Movement(MovementPolicy):
 
         Args:
             pcla_agent (PCLA_Agent): The PCLA agent responsible for decision making
-            xml_route (str): Path to route agent must follow, path must be .xml file
             client (carla.Client): CARLA client instance
             spawn_timepoint (float): The simulation time at which the vehicle should be spawned and start following the trajectory.
                 If set to a negative value, the vehicle will be spawned immediately at the first trajectory point. Defaults to -1.0.

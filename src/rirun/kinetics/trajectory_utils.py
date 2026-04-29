@@ -3,7 +3,13 @@ import xml.etree.ElementTree as ET
 import carla
 
 
-def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str = "straight", force_heading_interpolation: bool = False) -> Trajectory:
+def process_trajectory_file(
+    trajectory_filepath,
+    heading_interpolation_mode: str = "straight",
+    force_heading_interpolation: bool = False,
+    mapmatch: bool = False,
+    world: carla.World = None,
+) -> Trajectory:
     """Process a trajectory file and return a Trajectory object.
 
     A trajectory file is expected to be a CSV file containing lines with three to five comma-separated values:
@@ -15,6 +21,8 @@ def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str
         trajectory_filepath (str): The filepath to the trajectory file.
         heading_interpolation_mode (str): The mode to use for heading generation. "straight" (default): Calculate headings based on the angle between the current and the next trajectory point. "spline": Create a spline curve over the trajectory to generate heading angles.
         force_heading_interpolation (bool): If True, forces heading interpolation even if the trajectory file contains heading information. Default is False.
+        mapmatch (bool): If True, project trajectory points onto the road network using the Carla map from ``world``. Default is False.
+        world (carla.World): The Carla world used for map-matching. Must be provided when ``mapmatch`` is True. Default is None.
 
     Returns:
         Trajectory: A processed Trajectory object.
@@ -37,11 +45,92 @@ def process_trajectory_file(trajectory_filepath, heading_interpolation_mode: str
     trajectory = Trajectory(bare_route)
     trajectory.apply_carla_coord_conversion()
 
+    if mapmatch:
+        if world is None:
+            raise ValueError("World must be provided for map-matching.")
+        trajectory = _mapmatch_trajectory(trajectory, world)
+
     trajectory.gen_speeds()
     if num_fields == 3 or force_heading_interpolation:
         trajectory.gen_headings(mode=heading_interpolation_mode)
 
     return trajectory
+
+
+def _mapmatch_trajectory(trajectory: Trajectory, world: carla.World) -> Trajectory:
+    """Map-match a trajectory to the road network using the Carla map extracted from the world.
+
+    Args:
+        trajectory (Trajectory): The input trajectory to be map-matched.
+        world (carla.World): The Carla world used for map-matching.
+
+    Returns:
+        Trajectory: A new Trajectory object with points adjusted to align with the road network.
+    """
+
+    ADAPTIVE_MODE = True
+    DISTANCE_OFFSET = 1.5  # should be roughly half the width of a car
+
+    carla_map = world.get_map()
+    projected_route = []
+    for trajectory_point in trajectory.get_trajectory():
+        center_wp = carla_map.get_waypoint(
+            carla.Location(x=trajectory_point.x, y=trajectory_point.y, z=0)
+        )
+        if ADAPTIVE_MODE:
+            center_loc = center_wp.transform.location
+            lane_width = center_wp.lane_width
+            traj_point_loc = carla.Location(
+                x=trajectory_point.x, y=trajectory_point.y, z=0
+            )
+            distance_vector = center_loc - traj_point_loc
+            distance_threshold = max(lane_width / 2 - DISTANCE_OFFSET, 0)
+
+            next_lane_candidate = (
+                center_loc - distance_vector.make_unit_vector() * lane_width
+            )  # at this location, a neighboring lane could be located
+
+            # perform mapmatching only if the car is too close to the lane boundary and there is no lane for the car to cross into
+            if (
+                distance_vector.length()
+                >= distance_threshold  # car too close to lane shoulder
+                and not carla_map.get_waypoint(  # function returns none if there is no lane at that waypoint
+                    next_lane_candidate, project_to_road=False
+                )
+            ):
+                # project the actual trajectory point to DISTANCE_THRESHOLD meters from the center waypoint in the direction of the trajectory point
+                mapmatched_loc = (
+                    center_loc - distance_threshold * distance_vector.make_unit_vector()
+                )
+                projected_route.append(
+                    (
+                        mapmatched_loc.x,
+                        mapmatched_loc.y,
+                        trajectory_point.time,
+                        center_wp.transform.rotation.yaw,
+                    )
+                )
+            else:
+                projected_route.append(
+                    (
+                        trajectory_point.x,
+                        trajectory_point.y,
+                        trajectory_point.time,
+                        trajectory_point.heading,
+                    )
+                )
+
+        else:
+            projected_route.append(
+                (
+                    center_wp.transform.location.x,
+                    center_wp.transform.location.y,
+                    trajectory_point.time,
+                    center_wp.transform.rotation.yaw,
+                )
+            )
+    new_trajectory = Trajectory(projected_route)
+    return new_trajectory
 
 
 def get_first_xml_waypoint(xml_path: str) -> CarlaTrajectoryPoint:

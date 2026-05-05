@@ -73,6 +73,8 @@ class LocalPlanner(object):
         self._waypoints_queue = deque(maxlen=10000)
         self._min_waypoint_queue_length = 100
         self._stop_waypoint_creation = False
+        self._auto_roam_on_empty = False
+        self._plan_refill_callback = None
 
         # Base parameters
         self._dt = 1.0 / 20.0
@@ -133,9 +135,32 @@ class LocalPlanner(object):
                                                         max_steering=self._max_steer)
 
         # Compute the current vehicle waypoint
-        current_waypoint = self._map.get_waypoint(self._vehicle.get_location())
-        self.target_waypoint, self.target_road_option = (current_waypoint, RoadOption.LANEFOLLOW)
+        current_waypoint = self._get_forward_waypoint()
+        self.target_waypoint, self.target_road_option = (
+            current_waypoint,
+            RoadOption.LANEFOLLOW,
+        )
         self._waypoints_queue.append((self.target_waypoint, self.target_road_option))
+
+    def _get_forward_waypoint(self):
+        """
+        Return a waypoint ahead of the vehicle that matches its driving direction.
+        Projects a point 3m forward along the vehicle's heading and snaps to road,
+        avoiding the problem where get_waypoint snaps to a wrong-direction lane.
+        """
+        veh_transform = self._vehicle.get_transform()
+        fwd = veh_transform.get_forward_vector()
+        ahead_loc = veh_transform.location + carla.Location(
+            x=fwd.x * 3.0, y=fwd.y * 3.0
+        )
+        wp = self._map.get_waypoint(ahead_loc)
+        # Verify the waypoint faces roughly forward; fall back to nearest if not
+        wp_fwd = wp.transform.get_forward_vector()
+        dot = fwd.x * wp_fwd.x + fwd.y * wp_fwd.y
+        if dot < 0:
+            # Snapped to wrong lane; try the vehicle's actual location instead
+            wp = self._map.get_waypoint(veh_transform.location)
+        return wp
 
     def set_speed(self, speed):
         """
@@ -181,11 +206,19 @@ class LocalPlanner(object):
                 road_option = RoadOption.LANEFOLLOW
             else:
                 # random choice between the possible options
-                road_options_list = _retrieve_options(
-                    next_waypoints, last_waypoint)
-                road_option = random.choice(road_options_list)
-                next_waypoint = next_waypoints[road_options_list.index(
-                    road_option)]
+                road_options_list = _retrieve_options(next_waypoints, last_waypoint)
+                # Filter out VOID (U-turn) options before choosing.
+                valid_pairs = [
+                    (wp, opt)
+                    for wp, opt in zip(next_waypoints, road_options_list)
+                    if opt != RoadOption.VOID
+                ]
+                if valid_pairs:
+                    next_waypoint, road_option = random.choice(valid_pairs)
+                else:
+                    # All VOID - pick the first waypoint as safety fallback
+                    next_waypoint = next_waypoints[0]
+                    road_option = RoadOption.LANEFOLLOW
 
             self._waypoints_queue.append((next_waypoint, road_option))
 
@@ -220,6 +253,10 @@ class LocalPlanner(object):
         """Sets an offset for the vehicle"""
         self._vehicle_controller.set_offset(offset)
 
+    def set_plan_refill_callback(self, callback):
+        """Registers a callback that can append to the queue before it runs dry."""
+        self._plan_refill_callback = callback
+
     def run_step(self, debug=False):
         """
         Execute one step of local planning which involves running the longitudinal and lateral PID controllers to
@@ -230,6 +267,27 @@ class LocalPlanner(object):
         """
         if self._follow_speed_limits:
             self._target_speed = self._vehicle.get_speed_limit()
+
+        # NOTE: This is checked BEFORE purge so we pre-fill on the next cycle.
+        # The real guard is AFTER purge below.
+        if (
+            self._auto_roam_on_empty
+            and self._stop_waypoint_creation
+            and len(self._waypoints_queue) == 0
+        ):
+            self._stop_waypoint_creation = False
+            seed_wp = self._get_forward_waypoint()
+            self._waypoints_queue.append((seed_wp, RoadOption.LANEFOLLOW))
+
+        if (
+            self._stop_waypoint_creation
+            and self._plan_refill_callback is not None
+            and len(self._waypoints_queue) < self._min_waypoint_queue_length
+        ):
+            try:
+                self._plan_refill_callback(self)
+            except Exception as error:
+                print("Route refill callback failed: %s" % error)
 
         # Add more waypoints too few in the horizon
         if not self._stop_waypoint_creation and len(self._waypoints_queue) < self._min_waypoint_queue_length:
@@ -259,12 +317,20 @@ class LocalPlanner(object):
 
         # Get the target waypoint and move using the PID controllers. Stop if no target waypoint
         if len(self._waypoints_queue) == 0:
-            control = carla.VehicleControl()
-            control.steer = 0.0
-            control.throttle = 0.0
-            control.brake = 1.0
-            control.hand_brake = False
-            control.manual_gear_shift = False
+            if self._auto_roam_on_empty:
+                self._stop_waypoint_creation = False
+                seed_wp = self._get_forward_waypoint()
+                self._waypoints_queue.append((seed_wp, RoadOption.LANEFOLLOW))
+                self._compute_next_waypoints(k=self._min_waypoint_queue_length)
+                self.target_waypoint, self.target_road_option = self._waypoints_queue[0]
+                control = self._vehicle_controller.run_step(self._target_speed, self.target_waypoint)
+            else:
+                control = carla.VehicleControl()
+                control.steer = 0.0
+                control.throttle = 0.0
+                control.brake = 1.0
+                control.hand_brake = False
+                control.manual_gear_shift = False
         else:
             self.target_waypoint, self.target_road_option = self._waypoints_queue[0]
             control = self._vehicle_controller.run_step(self._target_speed, self.target_waypoint)
@@ -310,8 +376,7 @@ def _retrieve_options(list_waypoints, current_waypoint):
 
     :param list_waypoints: list with the possible target waypoints in case of multiple options
     :param current_waypoint: current active waypoint
-    :return: list of RoadOption enums representing the type of connection from the active waypoint to each
-             candidate in list_waypoints
+    :return: list of RoadOption enums, same length as list_waypoints
     """
     options = []
     for next_waypoint in list_waypoints:
@@ -336,17 +401,22 @@ def _compute_connection(current_waypoint, next_waypoint, threshold=35):
              RoadOption.STRAIGHT
              RoadOption.LEFT
              RoadOption.RIGHT
+             RoadOption.VOID (for U-turns)
     """
-    n = next_waypoint.transform.rotation.yaw
-    n = n % 360.0
+    n = next_waypoint.transform.rotation.yaw % 360.0
+    c = current_waypoint.transform.rotation.yaw % 360.0
 
-    c = current_waypoint.transform.rotation.yaw
-    c = c % 360.0
+    diff_angle = (n - c) % 360.0
+    if diff_angle > 180:
+        diff_angle -= 360
 
-    diff_angle = (n - c) % 180.0
-    if diff_angle < threshold or diff_angle > (180 - threshold):
+    # Detect U-turns: if the angle is near 180 degrees, return VOID
+    if abs(diff_angle) > 180 - threshold:
+        return RoadOption.VOID
+
+    if abs(diff_angle) < threshold:
         return RoadOption.STRAIGHT
-    elif diff_angle > 90.0:
-        return RoadOption.LEFT
-    else:
+    elif diff_angle > 0:
         return RoadOption.RIGHT
+    else:
+        return RoadOption.LEFT

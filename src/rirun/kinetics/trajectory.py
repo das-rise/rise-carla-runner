@@ -109,6 +109,19 @@ class Trajectory:
         """
         self._y = [-y for y in self._y]
 
+    def apply_offset(self, x_offset: float, y_offset: float) -> None:
+        """
+        Shift all trajectory coordinates by the given offsets.
+        Use this to undo a coordinate origin shift applied during data extraction
+        (e.g. the --offset argument of savant2rirun) before calling apply_carla_coord_conversion.
+
+        Args:
+            x_offset (float): Value to add to all x coordinates.
+            y_offset (float): Value to add to all y coordinates.
+        """
+        self._x = [x + x_offset for x in self._x]
+        self._y = [y + y_offset for y in self._y]
+
     def add_headings(self, headings: List[carla.Rotation]) -> None:
         """
         Add headings to a trajectory.
@@ -270,6 +283,10 @@ class Trajectory:
                     dedup_x.append(self._x[i])
                     dedup_y.append(self._y[i])
                     dedup_indices.append(i)
+
+            if len(dedup_x) <= 3:
+                self.gen_headings(mode="straight")
+                return
 
             tck, u = interpolate.splprep([dedup_x, dedup_y], k=3, s=100)
             dx, dy = interpolate.splev(u, tck, der=1)

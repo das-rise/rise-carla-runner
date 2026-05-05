@@ -27,9 +27,7 @@ class WindowedBirdseyeCamera:
             loc (Tuple[float, float, float]): Camera location in world coordinates.
         """
         pygame.init()
-        # Get the spectator (camera) object
         self._world = world
-        spectator = self._world.get_spectator()
 
         self._width = 1920
         self._height = 1080
@@ -41,13 +39,13 @@ class WindowedBirdseyeCamera:
         camera_bp.set_attribute("image_size_y", str(self._height))
         camera_bp.set_attribute("fov", "110")
 
-        # Attach the camera to the spectator
+        # Spawn the camera at absolute world coordinates (no parent actor)
         camera_transform = carla.Transform(
             carla.Location(x=loc[0], y=loc[1], z=loc[2]),
             carla.Rotation(pitch=270, yaw=0.0, roll=0),
         )
         self._camera = world.spawn_actor(
-            camera_bp, camera_transform, attach_to=spectator
+            camera_bp, camera_transform
         )
 
         # Initialize the display window
@@ -119,6 +117,7 @@ class StreamingCamera:
         preferred_fourccs: Optional[List[str]] = None,  # e.g. ["avc1", "H264", "mp4v"],
         timestamp_offset=0,
         ego_vehicle: Optional[Actor] = None,
+        display_camera: str = "stationary_overhead",
     ) -> None:
         """
         Args:
@@ -142,6 +141,8 @@ class StreamingCamera:
         self._height = height
         self._fps = fps
         self._overlay_timestamp = overlay_timestamp
+        self._display_camera = display_camera
+        self._overhead_camera_position = tuple(loc)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self._video_name = video_name or f"birdseye_recording_{ts}"
@@ -154,20 +155,26 @@ class StreamingCamera:
         bp = world.get_blueprint_library().find("sensor.camera.rgb")
         bp.set_attribute("image_size_x", str(self._width))
         bp.set_attribute("image_size_y", str(self._height))
-        bp.set_attribute("fov", "110")
 
         if ego_vehicle:
-            # tf = carla.Transform(carla.Location(x=0.0, y=0.0, z=1.5))
-            tf = carla.Transform(carla.Location(x=0.0, y=0.0, z=50.0), carla.Rotation(pitch=-90, yaw=0.0, roll=0))
+            tf, attachment, fov = self._ego_camera_transform(
+                ego_vehicle.get_actor(),
+                display_camera,
+                self._overhead_camera_position,
+            )
+            bp.set_attribute("fov", fov)
             target = ego_vehicle.get_actor()
         else:
+            bp.set_attribute("fov", "110")
             tf = carla.Transform(
                 carla.Location(x=loc[0], y=loc[1], z=loc[2]),
                 carla.Rotation(pitch=-90, yaw=0.0, roll=0),
             )
-            target = self._world.get_spectator()
+            # Spawn at absolute world coordinates — no parent actor
+            target = None
+            attachment = carla.AttachmentType.Rigid
 
-        self._camera = world.spawn_actor(bp, tf, attach_to=target)
+        self._camera = world.spawn_actor(bp, tf, attach_to=target, attachment_type=attachment)
 
         # Atexit
         self._writer_thread = None
@@ -207,9 +214,38 @@ class StreamingCamera:
         # Timestamp offset
         self.timestamp_offset = timestamp_offset
 
+        # Latest captured frame (BGR ndarray), updated each sensor tick for display
+        self._latest_frame = None
+        self._reattached = False  # True after any reattach(); disables frame-count wait in stop_recording
+
         logging.info(f"Streaming recorder ready -> {self._video_path}")
 
     # ---------- Internals ----------
+
+    @staticmethod
+    def _ego_camera_transform(actor, display_camera: str, overhead_camera_position=None):
+        """
+        Return (carla.Transform, carla.AttachmentType, fov_str) for the given display camera.
+
+        dashcam : front windshield, Rigid attachment — matches automatic_control index 1.
+        ego     : top-down bird's-eye above the vehicle, using overhead_camera_position
+                  as a relative offset when provided.
+        """
+        bb = actor.bounding_box.extent
+        bound_x = 0.5 + bb.x
+        bound_z = 0.5 + bb.z
+        if display_camera == "ego_dashcam":
+            tf = carla.Transform(
+                carla.Location(x=+0.8 * bound_x, y=0.0, z=1.3 * bound_z)
+            )
+            return tf, carla.AttachmentType.Rigid, "90"
+        else:  # "ego_overhead"
+            rel_x, rel_y, rel_z = overhead_camera_position or (0.0, 0.0, 50.0)
+            tf = carla.Transform(
+                carla.Location(x=rel_x, y=rel_y, z=rel_z),
+                carla.Rotation(pitch=-90, yaw=0.0, roll=0),
+            )
+            return tf, carla.AttachmentType.Rigid, "110"
 
     def _open_writer(self) -> None:
         """Try several FourCCs until one opens for (mp4) container."""
@@ -324,6 +360,8 @@ class StreamingCamera:
         frame_bgr = arr[:, :, :3].copy()
         timestamp = float(image.timestamp)
 
+        self._latest_frame = frame_bgr
+
         item = (frame_bgr, timestamp)
 
         # Enqueue with chosen overload policy
@@ -351,6 +389,44 @@ class StreamingCamera:
         self._captured += 1
 
     # ---------- Public API ----------
+
+    def reattach(self, ego_vehicle) -> None:
+        """
+        Detach the camera from its current parent and reattach to *ego_vehicle*.
+
+        Destroys the old CARLA sensor actor and spawns a new one attached to the
+        new target, continuing to write into the same MP4 stream.
+
+        Args:
+            ego_vehicle: a Vehicle whose get_actor() is the new CARLA actor to follow.
+        """
+        was_listening = self._is_recording
+        if was_listening:
+            self._camera.stop()
+
+        try:
+            self._camera.destroy()
+        except Exception:
+            pass
+
+        bp = self._world.get_blueprint_library().find("sensor.camera.rgb")
+        bp.set_attribute("image_size_x", str(self._width))
+        bp.set_attribute("image_size_y", str(self._height))
+
+        tf, attachment, fov = self._ego_camera_transform(
+            ego_vehicle.get_actor(),
+            self._display_camera,
+            self._overhead_camera_position,
+        )
+        bp.set_attribute("fov", fov)
+        self._camera = self._world.spawn_actor(bp, tf, attach_to=ego_vehicle.get_actor(), attachment_type=attachment)
+
+        if was_listening:
+            self._camera.listen(lambda image: self._process_image(image))
+
+        self._reattached = True
+        self._captured = 0  # reset so stop_recording's wait doesn't use stale count
+        logging.info(f"StreamingCamera reattached to {ego_vehicle.name}")
 
     def start_recording(self) -> None:
         if self._is_recording:
@@ -380,8 +456,9 @@ class StreamingCamera:
             return
 
         logging.info("Stopping streaming recorder...")
-        while self._captured < wait_until_num_captured:
-            time.sleep(1)
+        if not self._reattached:
+            while self._captured < wait_until_num_captured:
+                time.sleep(1)
 
         self._is_recording = False
 
@@ -399,11 +476,19 @@ class StreamingCamera:
         except Exception:
             pass
 
-        # 3) Wait for all queued tasks to complete
+        # 3) Wait for all queued tasks to complete, but give up after 10 s so
+        #    a Ctrl+C or writer-thread crash doesn't hang the process forever.
         try:
-            self._queue.join()
+            deadline = time.time() + 10.0
+            while not self._queue.empty() or (
+                self._writer_thread is not None and self._writer_thread.is_alive()
+            ):
+                if time.time() > deadline:
+                    logging.warning("Queue drain timed out; some frames may be lost.")
+                    break
+                time.sleep(0.1)
         except Exception:
-            logging.exception("Error while joining queue")
+            logging.exception("Error while draining queue")
 
         # 4) Join writer thread
         if self._writer_thread is not None:

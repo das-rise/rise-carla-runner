@@ -1,15 +1,17 @@
 import argparse
 import os
+import random
 import time
 from datetime import datetime, timezone
+import numpy as np
 from rich_argparse import RichHelpFormatter
 import signal
 import sys
 import logging
 import subprocess
 import carla
-from rirun.kinetics.vehicle_tools import Vehicle
-from rirun.kinetics.movement import PCLA_Movement
+from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
+from rirun.kinetics.movement import PCLA_Movement, BehaviorMovement
 from rirun.kinetics.trajectory_utils import process_trajectory_file
 from rirun.utils.video_tools import StreamingCamera
 from rirun.utils.spinner import Spinner
@@ -26,6 +28,10 @@ def timestamp_now_dataprov() -> str:
     """Returns the current timestamp in ISO 8601 format for use with dataprov."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+import threading as _threading
+
+_stop_event = _threading.Event()
+
 
 def cleanup(sig: signal.Signals) -> None:
     """
@@ -37,10 +43,16 @@ def cleanup(sig: signal.Signals) -> None:
 
 def signal_handler(sig: signal.Signals, frame) -> None:
     """
-    Handle signals send to this script and exit
+    Handle signals send to this script and exit.
+    First press: set a stop flag so the main loop exits cleanly after the
+    current world.tick() returns (avoids interrupting a blocking C call).
+    Second (impatient) press: hard-exit immediately.
     """
     cleanup(sig)
-    sys.exit(1)
+    if not _stop_event.is_set():
+        _stop_event.set()
+    else:
+        os._exit(1)
 
 
 def execute(bash_str: str) -> None:
@@ -75,13 +87,13 @@ def parse_arguments():
         help="Path to OpenDrive (*.xodr) or Carla map (*.snet) file.",
     )
     parser.add_argument(
-        "--trajectory-filepaths",
+        "--npc_trajectory_filepaths",
         "-tf",
         type=str,
         nargs="*",
-        dest="trajectory_filepaths",
+        dest="npc_trajectory_filepaths",
         default=[],
-        help="Path(s) to trajectories csv file. First path passed belongs to potential ego vehicle.",
+        help="Path(s) to NPC trajectory CSV file(s).",
     )
     parser.add_argument(
         "--output_dir",
@@ -99,46 +111,82 @@ def parse_arguments():
         "--carla_address", type=str, help="IP of Carla server. Default: localhost:2000"
     )
     parser.add_argument(
-        "--movement",
-        choices=["pid", "pid_ts", "teleport"],
+        "--npc_movement",
+        choices=["pid", "pid_ts", "teleport", "behavior_agent"],
         default="teleport",
-        help="How vehicles move along trajectories (default: teleport).",
+        help="How vehicles move along trajectories (default: teleport). "
+             "Use 'behavior_agent' to hand off each trajectory vehicle to a BehaviorAgent "
+             "after spawning at its first trajectory position.",
     )
     parser.add_argument(
-        "--camera_mode",
-        choices=["ego", "overhead"],
-        default="overhead",
-        help="Attach camera to ego vehicle or choose overhead camera.",
+        "--npc_behavior",
+        choices=["cautious", "normal", "aggressive"],
+        default="cautious",
+        help="BehaviorAgent driving style used when --npc_movement behavior_agent is set (default: cautious).",
+    )
+    parser.add_argument(
+        "--display_camera",
+        choices=["ego_overhead", "stationary_overhead", "ego_dashcam"],
+        default=None,
+        help="Primary camera for display. If omitted, uses the first --record_cameras mode; "
+             "if neither is provided, uses stationary_overhead.",
+    )
+    parser.add_argument(
+        "--record_cameras",
+        nargs="+",
+        choices=["ego_dashcam", "ego_overhead", "stationary_overhead"],
+        default=None,
+        metavar="MODE",
+        help="Record one or more camera views simultaneously: ego_dashcam, ego_overhead, stationary_overhead. "
+             "Each mode produces a separate MP4 file named camera_<mode>_<ts>.mp4. "
+             "If not specified, records only the display camera.",
     )
     parser.add_argument(
         "--overhead_camera_position",
         type=float,
         nargs=3,
         metavar=("X", "Y", "Z"),
-        help="Start camera at given coordinates (overhead view).",
+        help="Overhead camera position as X Y Z. For stationary_overhead, this is a fixed world position. "
+             "For ego_overhead, this is a relative offset from the followed vehicle.",
     )
     parser.add_argument(
-        "--pcla_agent",
+        "--ego_agent",
         type=str,
-        choices=[agent.value for agent in PCLA_Agent],
-        help="Add a PCLA autonomous driving agent to the simulation.",
+        choices=[agent.value for agent in PCLA_Agent] + ["behavior_agent"],
+        help="Add an autonomous driving agent to the simulation. Use 'behavior_agent' for BehaviorAgent, or specify a PCLA agent name.",
     )
     parser.add_argument(
-        "--pcla_route",
+        "--ego_behavior",
         type=str,
-        help="Path to XML file containing the route for the PCLA agent (required if --pcla_agent is specified).",
+        choices=["cautious", "normal", "aggressive"],
+        default=None,
+        help="BehaviorAgent driving style used when --ego_agent behavior_agent is set (default: cautious).",
     )
     parser.add_argument(
-        "--pcla_spawn_time",
+        "--ego_route_filepath",
+        type=str,
+        help="Path to XML file containing the route for the ego agent (required if --ego_agent is specified).",
+    )
+    parser.add_argument(
+        "--ego_spawn_time",
         type=float,
         default=-1.0,
-        help="The simulation time at which the PCLA agent's vehicle should be spawned and start following the trajectory. If set to a negative value, the vehicle will be spawned immediately at the first trajectory point. Defaults to -1.0.",
+        help="The simulation time at which the ego agent's vehicle should be spawned and start following the trajectory. If set to a negative value, the vehicle will be spawned immediately at the first trajectory point. Defaults to -1.0.",
     )
     parser.add_argument(
         "--offset_time",
         type=float,
         default=0.0,
         help="Time offset in seconds to start the simulation at (default: 0.0).",
+    )
+    parser.add_argument(
+        "--npc_trajectory_offset",
+        type=float,
+        nargs=2,
+        metavar=("X_OFFSET", "Y_OFFSET"),
+        default=None,
+        help="Add (x, y) offset to all trajectory coordinates before Carla conversion. "
+             "Use when trajectories were extracted with a subtracted origin (e.g. savant2rirun --offset X Y).",
     )
     parser.add_argument(
         "--trajectory_statistics",
@@ -175,22 +223,55 @@ def parse_arguments():
         default=[],
         help="List of dataprov provenance files in the order 'OpenLabel, georef' to include as inputs in the provenance chain. One or both can be 'None'. Only used if --use-dataprov is set.",
     )
+    parser.add_argument(
+        "--num_random_behavior_npcs",
+        type=int,
+        default=0,
+        help="Number of additional BehaviorAgent-driven roaming NPC vehicles (default: 0).",
+    )
+    parser.add_argument(
+        "--no_z_check",
+        action="store_true",
+        help="Disable the z-coordinate sanity check that stops the simulation when a vehicle falls off the road.",
+    )
+    parser.add_argument(
+        "--on_npc_behavior_agent_route_done",
+        choices=["stop", "destroy", "roam"],
+        default="stop",
+        help="Behavior when an NPC BehaviorAgent completes its route: "
+             "stop (default) = brake and hold; destroy = remove from simulation; "
+             "roam = pick a new random destination and keep driving.",
+    )
+    parser.add_argument(
+        "--on_ego_behavior_agent_route_done",
+        choices=["stop", "roam"],
+        default="stop",
+        help="Behavior when the ego BehaviorAgent completes its route: "
+             "stop (default) = brake and hold; roam = pick a new random destination and keep driving.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducible simulations (affects BehaviorAgent destination sampling).",
+    )
 
     args = parser.parse_args()
 
-    # Validate that pcla_route is provided if pcla_agent is specified
-    if args.pcla_agent and not args.pcla_route:
-        parser.error("--pcla_route is required when --pcla_agent is specified")
-    if args.pcla_route and not args.pcla_agent:
-        parser.error("--pcla_agent is required when --pcla_route is specified")
+    # Validate that ego_route_filepath is provided if ego_agent is specified
+    if args.ego_agent and not args.ego_route_filepath:
+        parser.error("--ego_route_filepath is required when --ego_agent is specified")
+    if args.ego_route_filepath and not args.ego_agent:
+        parser.error("--ego_agent is required when --ego_route_filepath is specified")
+    if args.ego_behavior and args.ego_agent != "behavior_agent":
+        parser.error("--ego_behavior can only be used with --ego_agent behavior_agent")
+    if not args.npc_trajectory_filepaths and not args.ego_agent:
+        parser.error("At least one trajectory file or --ego_agent must be provided")
 
-    if not args.trajectory_filepaths and not args.pcla_agent:
-        parser.error("At least one trajectory file or --pcla_agent must be provided")
-
-    # Validate required environment variables based on chosen PCLA agent
-    if args.pcla_agent:
+    # Validate required environment variables based on chosen ego agent
+    if args.ego_agent and args.ego_agent != "behavior_agent":
         try:
-            check_agent_env(PCLA_Agent(args.pcla_agent))
+            check_agent_env(PCLA_Agent(args.ego_agent))
         except RuntimeError as e:
             parser.error(str(e))
 
@@ -201,6 +282,14 @@ def main() -> None:
     run_start_time = timestamp_now_dataprov()
 
     args = parse_arguments()
+
+    # Seed all random generators for reproducibility
+    _seed = args.seed
+    if _seed is not None:
+        random.seed(_seed)
+        np.random.seed(_seed)
+        logging.getLogger().info(f"Random seed set to {_seed}")
+    _rng = random.Random(_seed)  # RNG for NPC trajectory vehicles using behavior_agent
 
     if not args.carla_address:
         carla_host = "localhost"
@@ -222,8 +311,9 @@ def main() -> None:
 
     # Connect to Carla server
     client = carla.Client(carla_host, carla_ip)
-    load_map(client, args.map_filepath)
-    world = client.reload_world()
+    world = load_map(client, args.map_filepath)
+    if world is None:
+        world = client.get_world()
 
     # Wait until the map is fully loaded
     timeout = 10.0  # seconds
@@ -253,7 +343,7 @@ def main() -> None:
 
     # Process trajectories to convert them to Carla format and add speed and heading info
     trajectories_list = []
-    for file in args.trajectory_filepaths:
+    for file in args.npc_trajectory_filepaths:
         try:
             vehicle_name = os.path.basename(file).split(".")[0]
             trajectories_list.append(
@@ -264,6 +354,7 @@ def main() -> None:
                         force_heading_interpolation=args.force_heading_interpolation,
                         mapmatch=args.mapmatch,
                         world=world,
+                        offset=args.npc_trajectory_offset,
                     ),
                     vehicle_name,
                 )
@@ -278,11 +369,20 @@ def main() -> None:
     vehicles = []
     start_vectors = []
     for trajectory, vehicle_name in trajectories_list:
+        if args.npc_movement == "behavior_agent":
+            movement = BehaviorMovement(
+                client,
+                behavior=args.npc_behavior,
+                on_route_done=args.on_npc_behavior_agent_route_done,
+                rng=_rng,
+            )
+        else:
+            movement = args.npc_movement
         new_vehicle = Vehicle(
             world,
             trajectory,
             vehicle_name,
-            movement=args.movement,
+            movement=movement,
             deviation_statistics=args.trajectory_statistics,
         )
         vehicles.append(new_vehicle)
@@ -297,35 +397,71 @@ def main() -> None:
         start_vector = carla.Vector3D(x * speed_kmh / 3.6, y * speed_kmh / 3.6, 0)
         start_vectors.append(start_vector)
 
-    # Prepare PCLA agent vehicle (optional)
-    if args.pcla_agent:
-        logging.info(
-            f"Adding PCLA agent: {args.pcla_agent} with route: {args.pcla_route}"
-        )
-        pcla_agent_enum = PCLA_Agent(args.pcla_agent)
-        pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.pcla_spawn_time)
-        pcla_movement.set_throttle_exponent(1)
-        pcla_vehicle = Vehicle(
+    # Prepare ego agent vehicle (optional)
+    if args.ego_agent:
+        if args.ego_agent == "behavior_agent":
+            ego_behavior = args.ego_behavior or "cautious"
+            logging.info(
+                f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"
+            )
+            behavior_movement = BehaviorMovement(
+                client,
+                behavior=ego_behavior,
+                xml_route=args.ego_route_filepath,
+                on_route_done=args.on_ego_behavior_agent_route_done,
+            )
+            ego_vehicle = Vehicle(
+                world,
+                args.ego_route_filepath,
+                "ego_agent",
+                behavior_movement,
+                blueprint="vehicle.audi.etron",
+                role_name="hero",
+            )
+        else:
+            logging.info(
+                f"Adding PCLA agent: {args.ego_agent} with route: {args.ego_route_filepath}"
+            )
+            pcla_agent_enum = PCLA_Agent(args.ego_agent)
+            pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.ego_spawn_time)
+            pcla_movement.set_throttle_exponent(1)
+            ego_vehicle = Vehicle(
+                world,
+                args.ego_route_filepath,
+                "ego_agent",
+                pcla_movement,
+                blueprint="vehicle.audi.etron",
+                role_name="hero",
+            )
+        vehicles.append(ego_vehicle)
+
+    # Prepare BehaviorAgent roaming NPCs (optional)
+    if args.num_random_behavior_npcs > 0:
+        logging.info(f"Spawning {args.num_random_behavior_npcs} BehaviorAgent NPC vehicles...")
+        behavior_npcs = spawn_behavior_npcs(
             world,
-            args.pcla_route,
-            "pcla_agent",
-            pcla_movement,
-            blueprint="vehicle.audi.etron",
+            client,
+            num=args.num_random_behavior_npcs,
+            npc_behavior="cautious",
+            min_spacing=15.0,
         )
-        vehicles.append(pcla_vehicle)
+        vehicles.extend(behavior_npcs)
 
     logging.info(f"Vehicle list: {','.join([v.name for v in vehicles])}")
 
     success = True
     start_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    adjusted_elapsed_sim_seconds = args.offset_time
+    num_ticks = 0
+    display_screen = None
     try:
         spinner.update_message("Stepping simulation")
 
         # Define t0 at spawn time
-        start_time = world.get_snapshot().timestamp.elapsed_seconds
+        simulation_start_time = world.get_snapshot().timestamp.elapsed_seconds
 
         # Start at t=0 relative to spawn, plus potential offset
-        adjusted_elapsed_sim_seconds = args.offset_time
+        active_vehicles = []
 
         # step vehicles once to spawn those that spawn at the start
         [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
@@ -333,55 +469,123 @@ def main() -> None:
         ## CAMERA
 
         # Start camera
-        cam = StreamingCamera(
-            world,
-            loc=(
-                args.overhead_camera_position
-                if args.overhead_camera_position
-                else (0, 0, 50)
-            ),
-            fps=1 / timestep if timestep else 30,  # fallback for asynchronous mode
-            output_dir=args.output_dir + "/camera",
-            video_name=f"camera_{start_ts}",
-            preferred_fourccs=["mp4v"],
-            ego_vehicle=(
-                [v for v in vehicles if hasattr(v, "_actor")][0]
-                if args.camera_mode == "ego"
-                else None
-            ),
+        # Determine initial ego camera target (priority: ego_agent > first NPC)
+        def _pick_ego_vehicle(vehicle_list):
+            for name in ("ego_agent",):
+                v = next((v for v in vehicle_list if v.name == name and v.is_spawned()), None)
+                if v:
+                    return v
+            return next((v for v in vehicle_list if v.is_spawned()), None)
+
+        _record_modes = list(args.record_cameras) if args.record_cameras else []
+        _display_mode = (
+            args.display_camera
+            or (_record_modes[0] if _record_modes else "stationary_overhead")
         )
+        # Build list of camera modes to record; default to just the display camera.
+        if not _record_modes:
+            _record_modes = [_display_mode]
+        # Ensure the display camera is always recorded.
+        if _display_mode not in _record_modes:
+            _record_modes.append(_display_mode)
+        # Primary display index: the resolved display camera mode.
+        _display_idx = _record_modes.index(_display_mode)
 
-        cam.timestamp_offset = -start_time
-        cam.start_recording()
+        cams = []  # list of [mode, ego_vehicle_or_None, StreamingCamera]
+        for _mode in _record_modes:
+            _cam_ego = _pick_ego_vehicle(vehicles) if _mode in ("ego_overhead", "ego_dashcam") else None
+            _c = StreamingCamera(
+                world,
+                loc=(
+                    args.overhead_camera_position
+                    if args.overhead_camera_position
+                    else (0, 0, 50)
+                ),
+                fps=1 / timestep if timestep else 30,
+                output_dir=args.output_dir + "/camera",
+                video_name=f"camera_{_mode}_{start_ts}",
+                preferred_fourccs=["mp4v"],
+                ego_vehicle=_cam_ego,
+                display_camera=_mode,
+            )
+            _c.timestamp_offset = -simulation_start_time
+            cams.append([_mode, _cam_ego, _c])
 
-        num_ticks = 0
+        for _, _, _c in cams:
+            _c.start_recording()
+
+        # Optional pygame display: enabled automatically when a display server is available.
+        has_attached_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        if has_attached_display:
+            try:
+                import pygame as _pg
+                _pg.init()
+                display_screen = _pg.display.set_mode((1280, 720))
+                _pg.display.set_caption("RiRun Camera")
+            except Exception as e:
+                logging.warning(f"Display detected but pygame preview could not start: {e}")
+                display_screen = None
+        else:
+            logging.info("No display detected; running without live pygame preview.")
+
         while (
             adjusted_elapsed_sim_seconds < args.simulation_duration + args.offset_time
+            and not _stop_event.is_set()
         ):
             world.tick()
             num_ticks += 1
             snapshot = world.get_snapshot()
             traj_recorder.process_world_snapshot(snapshot)
             adjusted_elapsed_sim_seconds = (
-                snapshot.timestamp.elapsed_seconds - start_time + args.offset_time
+                snapshot.timestamp.elapsed_seconds - simulation_start_time + args.offset_time
             )
             [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
             active_vehicles = [
                 v for v in vehicles if not v._destroyed and v.is_spawned()
             ]
 
+            # Reattach any ego_overhead/ego_dashcam cameras whose target was destroyed
+            if active_vehicles:
+                for _cam_entry in cams:
+                    _cam_mode, _cam_ego, _cam = _cam_entry
+                    if _cam_mode in ("ego_overhead", "ego_dashcam"):
+                        if _cam_ego is None or _cam_ego._destroyed or not _cam_ego.is_spawned():
+                            _new_ego = _pick_ego_vehicle(active_vehicles)
+                            if _new_ego is not None:
+                                _cam.reattach(_new_ego)
+                                _cam_entry[1] = _new_ego
+
             # check if any vehicle has fallen off the road
-            for v in vehicles:
-                if not v.has_valid_z():
-                    raise Exception(
-                        f"Vehicle {v.name} has invalid z-coordinate at sim time {adjusted_elapsed_sim_seconds}. "
-                        f"Current z: {v.get_actor().get_transform().location.z}"
-                    )
+            if not args.no_z_check:
+                for v in vehicles:
+                    if not v.has_valid_z():
+                        raise Exception(
+                            f"Vehicle {v.name} has invalid z-coordinate at sim time {adjusted_elapsed_sim_seconds}. "
+                            f"Current z: {v.get_actor().get_transform().location.z}"
+                        )
             if num_ticks % 30 == 0:
                 spinner.update_message(
                     f"Stepping simulation {round((adjusted_elapsed_sim_seconds - args.offset_time) / args.simulation_duration * 100)}%; "
                     f"#active 🚗: {len(active_vehicles)}; ticks: {num_ticks}"
                 )
+
+            # Render latest camera frame to pygame window
+            if display_screen is not None:
+                import pygame as _pg
+                for event in _pg.event.get():
+                    if event.type == _pg.QUIT or (
+                        event.type == _pg.KEYDOWN and event.key == _pg.K_ESCAPE
+                    ):
+                        raise KeyboardInterrupt("pygame window closed")
+                _display_cam = cams[_display_idx][2] if cams else None
+                if _display_cam is not None and _display_cam._latest_frame is not None:
+                    frame_rgb = _display_cam._latest_frame[:, :, ::-1]  # BGR -> RGB
+                    surf = _pg.surfarray.make_surface(
+                        frame_rgb.swapaxes(0, 1)
+                    )
+                    scaled = _pg.transform.scale(surf, display_screen.get_size())
+                    display_screen.blit(scaled, (0, 0))
+                    _pg.display.flip()
 
     except Exception as e:
         logging.error(f"Exception! --> {e}", exc_info=True)
@@ -396,15 +600,19 @@ def main() -> None:
         )
         spinner.update_message("Saving outputs...")
         spinner.start()
-        cam.stop_recording(
-            num_ticks
-        )  # ensure all frames are flushed to disk before proceeding
+        if 'cams' in locals():
+            for _, _, _c in cams:
+                _c.stop_recording(num_ticks)  # flush all cameras to disk before proceeding
         traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
 
         spinner.stop()
 
-        # Destroy all remaining active vehicles
-        [v.destroy() for v in active_vehicles]
+        if display_screen is not None:
+            import pygame as _pg
+            _pg.quit()
+
+        # Destroy all remaining spawned vehicles
+        [v.destroy() for v in vehicles if v.is_spawned() and not v._destroyed]
 
         if args.use_dataprov:
             from dataprov import ProvenanceChain
@@ -427,35 +635,35 @@ def main() -> None:
             else:
                 input_provenance_files = None
 
-            mode_string = "real trajectories" if args.trajectory_filepaths else ""
+            mode_string = "real trajectories" if args.npc_trajectory_filepaths else ""
             mode_string += (
                 " and autonomous agents"
-                if args.pcla_agent and mode_string
+                if args.ego_agent and mode_string
                 else "autonomous agents"
-                if args.pcla_agent
+                if args.ego_agent
                 else ""
             )
 
             raw_inputs = []
             raw_input_formats = []
 
-            if args.trajectory_filepaths:
-                raw_inputs.extend(args.trajectory_filepaths)
-                raw_input_formats.extend(["CSV"] * len(args.trajectory_filepaths))
+            if args.npc_trajectory_filepaths:
+                raw_inputs.extend(args.npc_trajectory_filepaths)
+                raw_input_formats.extend(["CSV"] * len(args.npc_trajectory_filepaths))
 
             if args.map_filepath:
                 raw_inputs.append(args.map_filepath)
                 raw_input_formats.append("OpenDrive/Carla map")
 
-            if args.pcla_route:
-                raw_inputs.append(args.pcla_route)
+            if args.ego_route_filepath:
+                raw_inputs.append(args.ego_route_filepath)
                 raw_input_formats.append("XML")
 
             inputs = raw_inputs
             input_formats = raw_input_formats
             chain = ProvenanceChain.create(
                 entity_id=entity_id,
-                initial_source=args.trajectory_filepaths,
+                initial_source=args.npc_trajectory_filepaths,
                 description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
                 tags=[
                     "RIRUN",

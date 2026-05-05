@@ -100,7 +100,7 @@ def draw_origin(world: carla.World, scale: float = 1.0) -> None:
     )
 
 
-def _load_from_opendrive(client: carla.Client, xodr_filepath: str) -> None:
+def _load_from_opendrive(client: carla.Client, xodr_filepath: str) -> carla.World:
     """
     Load a CARLA world from an OpenDRIVE (.xodr) file.
 
@@ -112,7 +112,7 @@ def _load_from_opendrive(client: carla.Client, xodr_filepath: str) -> None:
     with open(xodr_filepath, "r") as openf:
         xodr_string = openf.read()
     logging.info(f"Loading world from OpenDrive file {xodr_filepath}...")
-    client.generate_opendrive_world(
+    return client.generate_opendrive_world(
         xodr_string,
         carla.OpendriveGenerationParameters(
             wall_height=0, smooth_junctions=False, additional_width=0
@@ -120,7 +120,7 @@ def _load_from_opendrive(client: carla.Client, xodr_filepath: str) -> None:
     )
 
 
-def _load_from_carla_map(client: carla.Client, map_name: str) -> None:
+def _load_from_carla_map(client: carla.Client, map_name: str) -> carla.World:
     """
     Load a CARLA world directly from a CARLA map.
 
@@ -130,22 +130,22 @@ def _load_from_carla_map(client: carla.Client, map_name: str) -> None:
     """
     logging.info(f"Loading world from CARLA map {map_name}...")
     try:
-        client.load_world(map_name)
+        return client.load_world(map_name)
     except RuntimeError as e:
         logging.error(f"Failed to load CARLA map {map_name}")
         logging.error("Ensure that the map name is correct and the map is available server-side.")
         raise
 
 
-def load_map(client: carla.Client, map_file: str) -> None:
+def load_map(client: carla.Client, map_file: str) -> carla.World:
     """
     Load a CARLA world from either an OpenDRIVE (.xodr) file or a CARLA map (.snet) file.
 
     Args:
         client (carla.Client): The CARLA client instance.
-        map_path (str): Path to the OpenDRIVE or CARLA map file.
+        map_file (str): Path to the OpenDRIVE or CARLA map file.
     """
     if map_file.endswith(".xodr"):
-        _load_from_opendrive(client, map_file)
+        return _load_from_opendrive(client, map_file)
     else:
-        _load_from_carla_map(client, map_file)
+        return _load_from_carla_map(client, map_file)

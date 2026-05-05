@@ -3,7 +3,6 @@ from rirun.kinetics.actor import Actor
 from rirun.PCLA.PCLA_agents import PCLA_Agent
 import math
 import random as _random_module
-import random
 import xml.etree.ElementTree as ET
 from typing import Optional
 import logging

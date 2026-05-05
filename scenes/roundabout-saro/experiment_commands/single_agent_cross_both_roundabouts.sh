@@ -1,8 +1,8 @@
 python src/rirun/run.py \
-    100 \
+    60 \
     scenes/roundabout-saro/maps/saro_fixed_bidirectional_WIDER_LANES.xodr \
-    --movement teleport \
+    --npc_movement teleport \
     --timestep 0.0333333333333333333 \
-    --pcla_agent neat_aim2dsem \
-    --pcla_route scenes/roundabout-saro/agent_routes/double_roundabout.xml \
-    --camera_mode ego
+    --ego_agent neat_aim2dsem \
+    --ego_route_filepath scenes/roundabout-saro/agent_routes/double_roundabout.xml \
+    --record_cameras ego_overhead

@@ -8,7 +8,7 @@ such waypoints.
 # Example run
 
 ```bash
-python run.py 15 PCLA-Town01/Town01.xodr PCLA-Town01/vehicle1_route.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route PCLA-Town01/agent_route.xml --camera_mode ego
+python run.py 15 PCLA-Town01/Town01.xodr --npc_trajectory_filepaths PCLA-Town01/vehicle1_route.csv --npc_movement teleport --timestep 0.0333333333333333333 --ego_agent neat_aim2ddepth --ego_route_filepath PCLA-Town01/agent_route.xml --record_cameras ego_overhead
 ```
 
 will use the `PCLA` agent `NEAT_AIM2DDEPTH`, primed to follow the route in PCLA-Town01/agent_route.xml, with the camera attached to the `ego_vehicle`.

@@ -52,6 +52,7 @@ def signal_handler(sig: signal.Signals, frame) -> None:
     if not _stop_event.is_set():
         _stop_event.set()
     else:
+        logging.warning(f"Second signal {sig} received, exiting immediately.")
         os._exit(1)
 
 

@@ -100,6 +100,11 @@ if [[ "$AGENT" == false && "$NPCS" == false ]]; then
   exit 1
 fi
 
+# ── Docker setup ───────────────────────────────────────────────────────────────
+. helpers/docker-quick.sh
+
+carla_docker_restart
+
 # ── Build command ──────────────────────────────────────────────────────────────
 export DIRECT=0
 

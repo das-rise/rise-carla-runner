@@ -265,6 +265,8 @@ def parse_arguments():
         parser.error("--ego_agent is required when --ego_route_filepath is specified")
     if args.ego_behavior and args.ego_agent != "behavior_agent":
         parser.error("--ego_behavior can only be used with --ego_agent behavior_agent")
+    if args.npc_behavior and args.npc_movement != "behavior_agent":
+        parser.error("--npc_behavior can only be used with --npc_movement behavior_agent")
     if not args.npc_trajectory_filepaths and not args.ego_agent:
         parser.error("At least one trajectory file or --ego_agent must be provided")
 

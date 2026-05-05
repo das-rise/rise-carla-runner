@@ -12,7 +12,8 @@
 #   --display_camera <mode>   ego_overhead | ego_dashcam | stationary_overhead  (default: ego_dashcam)
 #   --record_cameras <modes>  Space-separated list of views to record: ego_dashcam ego_overhead stationary_overhead
 #                          (default: records only --display_camera)
-#   --overhead_camera_position <x> <y> <z>  Overhead camera position: world-space for stationary_overhead,
+#   --overhead_camera_position <x> <y> <z>  Overhead camera position (repeat once per overhead mode, in
+#                          --record_cameras order): world-space for stationary_overhead,
 #                          relative to followed vehicle for ego_overhead (default: unset)
 #   --duration  <secs>     Simulation duration in seconds  (default: 15)
 #   --offset_time <secs>   Simulation clock offset to align CSV timestamps (default: 1013)
@@ -51,7 +52,7 @@ NPC_BEHAVIOR=cautious
 DISPLAY_CAMERA=stationary_overhead
 # RECORD_CAMERAS="ego_dashcam ego_overhead stationary_overhead"
 RECORD_CAMERAS="ego_dashcam stationary_overhead"
-OVERHEAD_POS="1505 -1145 100"
+OVERHEAD_POSITIONS=( "1505 -1145 100" )  # one entry per overhead camera mode in RECORD_CAMERAS order
 DURATION=40
 OFFSET_TIME=1013
 TIMESTEP=0.0333333333333333333
@@ -76,7 +77,7 @@ while [[ $# -gt 0 ]]; do
     --npc_behavior)     NPC_BEHAVIOR="$2";         shift ;;
     --display_camera)  DISPLAY_CAMERA="$2";      shift ;;
     --record_cameras) RECORD_CAMERAS=""; while [[ $# -gt 1 && "${2}" != --* ]]; do RECORD_CAMERAS="$RECORD_CAMERAS $2"; shift; done ;;
-    --overhead_camera_position) OVERHEAD_POS="$2 $3 $4"; shift 3 ;;
+    --overhead_camera_position) OVERHEAD_POSITIONS+=( "$2 $3 $4" ); shift 3 ;;
     --duration)     DURATION="$2";         shift ;;
     --offset_time)  OFFSET_TIME="$2";      shift ;;
     --timestep)     TIMESTEP="$2";         shift ;;
@@ -122,10 +123,10 @@ if [[ -n "$RECORD_CAMERAS" ]]; then
   CMD+=( --record_cameras $RECORD_CAMERAS )
 fi
 
-if [[ -n "$OVERHEAD_POS" ]]; then
+for _pos in "${OVERHEAD_POSITIONS[@]}"; do
   # shellcheck disable=SC2086
-  CMD+=( --overhead_camera_position $OVERHEAD_POS )
-fi
+  CMD+=( --overhead_camera_position $_pos )
+done
 
 if $AGENT; then
   CMD+=(

@@ -146,9 +146,17 @@ def parse_arguments():
         "--overhead_camera_position",
         type=float,
         nargs=3,
+        action="append",
         metavar=("X", "Y", "Z"),
-        help="Overhead camera position as X Y Z. For stationary_overhead, this is a fixed world position. "
-             "For ego_overhead, this is a relative offset from the followed vehicle.",
+        help="Overhead camera position as X Y Z. Repeat the flag once per overhead camera mode "
+             "(ego_overhead, stationary_overhead) in the same order as --record_cameras. "
+             "A single occurrence applies to all overhead modes. "
+             "For stationary_overhead this is a fixed world position; "
+             "for ego_overhead it is a relative offset from the followed vehicle. "
+             "Example (two overhead modes, different positions): "
+             "--record_cameras ego_overhead stationary_overhead "
+             "--overhead_camera_position 0 0 50 "
+             "--overhead_camera_position 1505 -1145 100",
     )
     parser.add_argument(
         "--ego_agent",
@@ -495,15 +503,22 @@ def main() -> None:
         _display_idx = _record_modes.index(_display_mode)
 
         cams = []  # list of [mode, ego_vehicle_or_None, StreamingCamera]
+        _positions = args.overhead_camera_position  # list of (x, y, z) or None
+        _overhead_pos_idx = 0  # counts only overhead modes; dashcam does not consume a triplet
         for _mode in _record_modes:
             _cam_ego = _pick_ego_vehicle(vehicles) if _mode in ("ego_overhead", "ego_dashcam") else None
+            # ego_dashcam uses a fixed vehicle-relative transform; overhead_camera_position does not apply.
+            if _mode in ("ego_overhead", "stationary_overhead"):
+                if _positions:
+                    _cam_pos = _positions[min(_overhead_pos_idx, len(_positions) - 1)]
+                else:
+                    _cam_pos = (0, 0, 50)
+                _overhead_pos_idx += 1
+            else:
+                _cam_pos = (0, 0, 50)  # unused by dashcam
             _c = StreamingCamera(
                 world,
-                loc=(
-                    args.overhead_camera_position
-                    if args.overhead_camera_position
-                    else (0, 0, 50)
-                ),
+                loc=_cam_pos,
                 fps=1 / timestep if timestep else 30,
                 output_dir=args.output_dir + "/camera",
                 video_name=f"camera_{_mode}_{start_ts}",

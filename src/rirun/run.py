@@ -681,11 +681,9 @@ def main() -> None:
                 operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
                 inputs=inputs,
                 input_formats=input_formats,
-                outputs=[
-                    args.output_dir + f"/traj/traj_{start_ts}.parquet",
-                    args.output_dir + f"/camera/camera_{start_ts}.mp4",
-                ],
-                output_formats=["Parquet", "MP4"],
+                outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
+                    + [f"{args.output_dir}/camera_{_mode}_{start_ts}.mp4" for _mode in _record_modes],
+                output_formats=["Parquet"] + ["MP4"] * len(_record_modes),
                 input_provenance_files=input_provenance_files,
                 capture_environment=True,
             )

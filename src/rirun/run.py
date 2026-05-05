@@ -573,7 +573,6 @@ def main() -> None:
 
             # Render latest camera frame to pygame window
             if display_screen is not None:
-                import pygame as _pg
                 for event in _pg.event.get():
                     if event.type == _pg.QUIT or (
                         event.type == _pg.KEYDOWN and event.key == _pg.K_ESCAPE
@@ -610,7 +609,6 @@ def main() -> None:
         spinner.stop()
 
         if display_screen is not None:
-            import pygame as _pg
             _pg.quit()
 
         # Destroy all remaining spawned vehicles

@@ -106,7 +106,7 @@ def parse_arguments():
     parser.add_argument(
         "--npc_behavior",
         choices=["cautious", "normal", "aggressive"],
-        default="cautious",
+        default=None,
         help="BehaviorAgent driving style used when --npc_movement behavior_agent is set (default: cautious).",
     )
     parser.add_argument(
@@ -459,7 +459,7 @@ def main() -> None:
         if args.npc_movement == "behavior_agent":
             movement = BehaviorMovement(
                 client,
-                behavior=args.npc_behavior,
+                behavior=args.npc_behavior or "cautious",
                 on_route_done=args.on_npc_behavior_agent_route_done,
                 rng=_rng,
             )

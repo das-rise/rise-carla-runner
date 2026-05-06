@@ -3,13 +3,13 @@ export SIMLINGO_USER_FLAG=1
 python src/rirun/run.py \
     15 \
     Town01 \
-    --trajectory-filepaths scenes/roundabout-saro/npc_test_routes/at_big_roundabout.csv \
+    --npc_trajectory_filepaths scenes/roundabout-saro/npc_test_routes/at_big_roundabout.csv \
     scenes/town01/npc_test_routes/vehicle1_straight.csv \
-    --movement teleport \
+    --npc_movement teleport \
     --timestep 0.0333333333333333333 \
-    --pcla_agent simlingo_rirun \
-    --pcla_route scenes/town01/agent_routes/agent_turn.xml \
-    --camera_mode ego
+    --ego_agent simlingo_rirun \
+    --ego_route_filepath scenes/town01/agent_routes/agent_turn.xml \
+    --record_cameras ego_overhead
 
 unset SIMLINGO_CUSTOM_PROMPT
 unset SIMLINGO_USER_FLAG

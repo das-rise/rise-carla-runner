@@ -2,10 +2,13 @@ from rirun.kinetics.stats import Statistic
 from rirun.kinetics.actor import Actor
 from rirun.PCLA.PCLA_agents import PCLA_Agent
 import math
+import random as _random_module
+import xml.etree.ElementTree as ET
 from typing import Optional
 import logging
 import carla
 from rirun.carla_agents.navigation.controller import VehiclePIDController
+from rirun.carla_agents.navigation.behavior_agent import BehaviorAgent
 from rirun.PCLA.PCLA import PCLA
 from rirun.kinetics.trajectory import CarlaTrajectoryPoint
 
@@ -14,6 +17,10 @@ from rirun.kinetics.trajectory import CarlaTrajectoryPoint
 
 class MovementPolicy:
     """Strategy interface for moving vehicles along a trajectory."""
+
+    #: Set to False in physics-enabled policies (e.g. BehaviorMovement) to skip
+    #: the z-coordinate sanity check that detects teleport vehicles falling off the map.
+    validate_z: bool = True
 
     def on_spawn(self, actor: Actor) -> None:
         """Called once the underlying CARLA actor is spawned."""
@@ -264,6 +271,9 @@ class TeleportMovement(MovementPolicy):
     """Move by setting the actor's transform directly at each timestamp.
     Optionally sets target velocity to match the speed in m/s."""
 
+    def on_spawn(self, actor: Actor) -> None:
+        actor.get_actor().set_simulate_physics(False)
+
     def __init__(self, temporal_trigger: float = 0.01):
         """
         Initialize the TeleportMovement policy.
@@ -435,3 +445,176 @@ class PCLA_Movement(MovementPolicy):
             exponent (float): The exponent to set for throttle adjustment.
         """
         self._throttle_exponent = exponent
+
+
+class BehaviorMovement(MovementPolicy):
+    """
+    Move a vehicle using CARLA's BehaviorAgent (fully autonomous, routes on the CARLA road network).
+
+    Agent creation and route planning are intentionally deferred to the first step() call
+    after spawning so that at least one world.tick() has occurred in synchronous mode.
+    This ensures the vehicle has settled onto the road surface before get_waypoint() is
+    called, preventing GlobalRoutePlanner from planning routes through off-road terrain.
+
+    An optional XML route file (same format used by PCLA) is supported: the first waypoint
+    is the spawn transform and the last waypoint is the initial destination.  If no route is
+    supplied, the agent roams to a random reachable spawn point.
+    """
+
+    validate_z: bool = False  # physics-enabled; CARLA settles the vehicle itself
+
+    def __init__(
+        self,
+        client: carla.Client,
+        behavior: str = "cautious",
+        xml_route: Optional[str] = None,
+        lateral_yield: float = 15.0,
+        temporal_trigger: float = 0.01,
+        on_route_done: str = "stop",
+        route_done_distance: float = 5.0,
+        enforce_driving_lane: bool = True,
+        rng: Optional[_random_module.Random] = None,
+    ) -> None:
+        self._client = client
+        self._behavior = behavior
+        self._xml_route = xml_route
+        self._lateral_yield = lateral_yield
+        self._temporal_trigger = temporal_trigger
+        self._on_route_done = on_route_done  # "stop" | "destroy" | "roam"
+        self._route_done_distance = route_done_distance
+        self._enforce_driving_lane = enforce_driving_lane
+        self._rng = rng or _random_module.Random()
+        self._agent: Optional[BehaviorAgent] = None
+        self._destination: Optional[carla.Location] = None
+        self._route_done = False
+        self._agent_initialized = False  # True after first post-spawn step
+        self._offroad_stop_logged = False
+
+    def on_spawn(self, actor: Actor) -> None:
+        # Intentionally empty: agent is created in the first step() after spawn
+        # so that world.tick() has run and the vehicle is on the road surface.
+        pass
+
+    def _init_agent(self, actor: Actor) -> None:
+        """Create the BehaviorAgent and set destination. Called on first step after spawn."""
+        world = actor.get_actor().get_world()
+        self._agent = BehaviorAgent(
+            actor.get_actor(),
+            behavior=self._behavior,
+            opt_dict={"lateral_yield_distance": self._lateral_yield},
+        )
+        self._agent._npc_mode = True
+
+        if self._xml_route is not None:
+            tree = ET.parse(self._xml_route)
+            waypoints = tree.getroot().findall("waypoint")
+            last = waypoints[-1]
+            dest = carla.Location(
+                x=float(last.get("x")),
+                y=float(last.get("y")),
+                z=float(last.get("z", 0.0)),
+            )
+        else:
+            spawn_points = world.get_map().get_spawn_points()
+            dest = self._rng.choice(spawn_points).location
+
+        self._destination = dest
+        self._agent.set_destination(dest)
+        self._agent_initialized = True
+        logging.info(
+            f"{actor.name}: BehaviorMovement destination set to ({dest.x:.1f}, {dest.y:.1f})"
+        )
+
+    def _distance_to_destination(self, actor: Actor) -> Optional[float]:
+        if self._destination is None:
+            return None
+        location = actor.get_actor().get_location()
+        return math.hypot(location.x - self._destination.x, location.y - self._destination.y)
+
+    def _apply_stop(self, actor: Actor) -> None:
+        actor.get_actor().apply_control(
+            carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0)
+        )
+
+    def _is_on_driving_lane(self, actor: Actor) -> bool:
+        if not self._enforce_driving_lane:
+            return True
+        world = actor.get_actor().get_world()
+        location = actor.get_actor().get_location()
+        waypoint = world.get_map().get_waypoint(
+            location,
+            project_to_road=False,
+            lane_type=carla.LaneType.Driving,
+        )
+        return waypoint is not None
+
+    def _stop_if_offroad(self, actor: Actor) -> bool:
+        if self._is_on_driving_lane(actor):
+            return False
+
+        if not self._offroad_stop_logged:
+            location = actor.get_actor().get_location()
+            logging.warning(
+                f"{actor.name}: BehaviorMovement stopped off-road at "
+                f"({location.x:.1f}, {location.y:.1f}, {location.z:.1f})"
+            )
+            self._offroad_stop_logged = True
+
+        self._route_done = True
+        self._apply_stop(actor)
+        return True
+
+    def _handle_route_done(self, actor: Actor) -> None:
+        logging.info(f"{actor.name}: BehaviorMovement route completed ({self._on_route_done}).")
+        if self._on_route_done == "destroy":
+            actor.destroy()
+        elif self._on_route_done == "roam":
+            world = actor.get_actor().get_world()
+            spawn_points = world.get_map().get_spawn_points()
+            dest = self._rng.choice(spawn_points).location
+            self._destination = dest
+            self._agent.set_destination(dest)
+            logging.info(
+                f"{actor.name}: BehaviorMovement new roam destination ({dest.x:.1f}, {dest.y:.1f})"
+            )
+        else:  # "stop"
+            self._route_done = True
+            self._apply_stop(actor)
+
+    def step(
+        self,
+        actor: Actor,
+        simulation_time: Optional[float],
+        deviation_statistics: Optional[Statistic] = None,
+    ) -> None:
+        if not actor.is_spawned():
+            curr_traj_time = actor.get_current_trajectory_point().time
+            if simulation_time >= curr_traj_time - self._temporal_trigger:
+                actor.spawn()
+            return
+
+        # Defer agent creation until after the first world.tick()
+        if not self._agent_initialized:
+            self._init_agent(actor)
+            return
+
+        if self._route_done:
+            self._apply_stop(actor)
+            return
+
+        if self._stop_if_offroad(actor):
+            return
+
+        distance_to_destination = self._distance_to_destination(actor)
+        reached_xml_destination = (
+            self._xml_route is not None
+            and distance_to_destination is not None
+            and distance_to_destination <= self._route_done_distance
+        )
+        if reached_xml_destination or self._agent.done():
+            self._handle_route_done(actor)
+            return
+
+        control = self._agent.run_step()
+        control.manual_gear_shift = False
+        actor.get_actor().apply_control(control)

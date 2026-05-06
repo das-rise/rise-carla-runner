@@ -9,6 +9,7 @@ def process_trajectory_file(
     force_heading_interpolation: bool = False,
     mapmatch: bool = False,
     world: carla.World = None,
+    offset: tuple = None,
 ) -> Trajectory:
     """Process a trajectory file and return a Trajectory object.
 
@@ -19,6 +20,7 @@ def process_trajectory_file(
 
     Args:
         trajectory_filepath (str): The filepath to the trajectory file.
+        offset (tuple, optional): A (x_offset, y_offset) tuple to add to all coordinates before applying the Carla coordinate conversion. Use this when trajectory coordinates were recorded with a subtracted origin (e.g. savant2rirun --offset). Defaults to None.
         heading_interpolation_mode (str): The mode to use for heading generation. "straight" (default): Calculate headings based on the angle between the current and the next trajectory point. "spline": Create a spline curve over the trajectory to generate heading angles.
         force_heading_interpolation (bool): If True, forces heading interpolation even if the trajectory file contains heading information. Default is False.
         mapmatch (bool): If True, project trajectory points onto the road network using the Carla map from ``world``. Default is False.
@@ -43,6 +45,8 @@ def process_trajectory_file(
             line_readings = tuple([float(reading) for reading in line.split(",")])
             bare_route.append(line_readings)
     trajectory = Trajectory(bare_route)
+    if offset is not None:
+        trajectory.apply_offset(offset[0], offset[1])
     trajectory.apply_carla_coord_conversion()
 
     if mapmatch:

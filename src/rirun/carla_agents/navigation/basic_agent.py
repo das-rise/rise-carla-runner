@@ -10,13 +10,14 @@ It can also make use of the global route planner to follow a specifed route
 """
 
 import carla
+import math
 from shapely.geometry import Polygon
 
-from agents.navigation.local_planner import LocalPlanner, RoadOption
-from agents.navigation.global_route_planner import GlobalRoutePlanner
-from agents.tools.misc import (get_speed, is_within_distance,
-                               get_trafficlight_trigger_location,
-                               compute_distance)
+from rirun.carla_agents.navigation.local_planner import LocalPlanner, RoadOption
+from rirun.carla_agents.navigation.global_route_planner import GlobalRoutePlanner
+from rirun.carla_agents.tools.misc import (get_speed, is_within_distance,
+                                           get_trafficlight_trigger_location,
+                                           compute_distance)
 
 
 class BasicAgent(object):
@@ -87,6 +88,12 @@ class BasicAgent(object):
         if 'offset' in opt_dict:
             self._offset = opt_dict['offset']
 
+        self._lateral_yield_distance = 5.0
+        if 'lateral_yield_distance' in opt_dict:
+            self._lateral_yield_distance = opt_dict['lateral_yield_distance']
+
+        self._last_yield_id = -1
+
         # Initialize the planners
         self._local_planner = LocalPlanner(self._vehicle, opt_dict=opt_dict, map_inst=self._map)
         if grp_inst:
@@ -101,6 +108,8 @@ class BasicAgent(object):
         # Get the static elements of the scene
         self._lights_list = self._world.get_actors().filter("*traffic_light*")
         self._lights_map = {}  # Dictionary mapping a traffic light to a wp corrspoing to its trigger volume location
+        self._yield_signs_list = self._world.get_actors().filter("*yield*")
+        self._yield_signs_map = {}
 
     def add_emergency_stop(self, control):
         """
@@ -138,6 +147,53 @@ class BasicAgent(object):
         """Get method for protected member local planner"""
         return self._global_planner
 
+    def _is_uturn_plan(self, plan):
+        """
+        Check if the plan contains a U-turn (angle difference > 90-120 degrees).
+        """
+        if len(plan) < 2:
+            return False
+
+        vehicle_transform = self._vehicle.get_transform()
+        forward_vec = vehicle_transform.get_forward_vector()
+        current_loc = vehicle_transform.location
+
+        # 1. Broad Dot Product Checks (Short window - Fix 4.0)
+        # Only check immediate backward motion to avoid false-positives in curves
+        # Check waypoints at index 3, 6 (approx 6-12m)
+        for i in [3, 6]:
+            if i < len(plan):
+                p_check = plan[i][0].transform.location
+                vec_to_check = p_check - current_loc
+                # Normalize the check vector
+                norm = math.sqrt(
+                    vec_to_check.x**2 + vec_to_check.y**2 + vec_to_check.z**2
+                )
+                if (
+                    norm > 2.0
+                ):  # Only check if sufficiently far to have meaningful vector
+                    dot = (
+                        forward_vec.x * vec_to_check.x + forward_vec.y * vec_to_check.y
+                    ) / norm
+                    if dot < -0.6:  # Heading significantly backward (Relaxed from -0.3)
+                        return True
+
+        # 2. Cumulative Heading Change Check (Very short distance - Fix 4.0)
+        # If the plan rotates more than 160 degrees over a short distance, it's a U-turn
+        # Roundabouts typically rotate 90 degrees every 15-20 meters.
+        if len(plan) > 5:
+            start_yaw = plan[0][0].transform.rotation.yaw
+            # Only check up to 10 waypoints (approx 20m)
+            for i in range(1, min(len(plan), 10)):
+                check_yaw = plan[i][0].transform.rotation.yaw
+                diff = (check_yaw - start_yaw) % 360
+                if diff > 180:
+                    diff -= 360
+                if abs(diff) > 160:  # Extremely sharp U-turn (Relaxed from 130)
+                    return True
+
+        return False
+
     def set_destination(self, end_location, start_location=None):
         """
         This method creates a list of waypoints between a starting and ending location,
@@ -152,13 +208,31 @@ class BasicAgent(object):
             start_location = self._local_planner.target_waypoint.transform.location
             clean_queue = True
         else:
-            start_location = self._vehicle.get_location()
             clean_queue = False
 
         start_waypoint = self._map.get_waypoint(start_location)
         end_waypoint = self._map.get_waypoint(end_location)
 
         route_trace = self.trace_route(start_waypoint, end_waypoint)
+
+        # Validate U-turns for fresh routes (clean_queue=True).
+        if clean_queue and self._is_uturn_plan(route_trace):
+            raise ValueError('U-turn detected in proposed route. Rejecting destination.')
+
+        # For spliced routes, validate the heading at the splice point.
+        # The new route's first waypoints must continue roughly in the same
+        # direction as the current plan's last waypoints (no sharp reversal).
+        if not clean_queue and len(route_trace) >= 2:
+            plan = list(self._local_planner.get_plan())
+            if len(plan) >= 2:
+                last_yaw = plan[-1][0].transform.rotation.yaw
+                splice_yaw = route_trace[min(2, len(route_trace) - 1)][0].transform.rotation.yaw
+                diff = (splice_yaw - last_yaw) % 360
+                if diff > 180:
+                    diff -= 360
+                if abs(diff) > 130:
+                    raise ValueError('U-turn at splice point. Rejecting destination.')
+
         self._local_planner.set_global_plan(route_trace, clean_queue=clean_queue)
 
     def set_global_plan(self, plan, stop_waypoint_creation=True, clean_queue=True):
@@ -312,6 +386,56 @@ class BasicAgent(object):
 
         return (False, None)
 
+    def _affected_by_yield_sign(self, actor, max_distance=None):
+        """
+        Method to check if there is a yield sign affecting the actor.
+
+            :param actor (carla.Actor): actor to check.
+            :param max_distance (float): max distance for yield signs to be considered relevant.
+        """
+        if not max_distance:
+            max_distance = self._base_tlight_threshold
+
+        actor_location = actor.get_location()
+        actor_wpt = self._map.get_waypoint(actor_location)
+
+        for yield_sign in self._yield_signs_list:
+            if yield_sign.id in self._yield_signs_map:
+                trigger_wp = self._yield_signs_map[yield_sign.id]
+            else:
+                trigger_location = yield_sign.get_location()
+                trigger_wp = self._map.get_waypoint(trigger_location)
+                self._yield_signs_map[yield_sign.id] = trigger_wp
+
+            # Check distance first
+            trigger_location = trigger_wp.transform.location
+            dist = trigger_location.distance(actor_location)
+            if dist > max_distance:
+                continue
+
+            # Check if it's "ahead" of us (relative to our forward vector)
+            actor_fwd = actor_wpt.transform.get_forward_vector()
+            diff = trigger_location - actor_location
+            dot_ahead = diff.x * actor_fwd.x + diff.y * actor_fwd.y
+            if dot_ahead < 0:
+                continue
+
+            # Check orientation: The road should have a similar forward vector (within 45 degrees)
+            wp_fwd = trigger_wp.transform.get_forward_vector()
+            dot_ve_wp = (
+                actor_fwd.x * wp_fwd.x + actor_fwd.y * wp_fwd.y + actor_fwd.z * wp_fwd.z
+            )
+            if dot_ve_wp < 0.7:  # approx 45 degrees
+                continue
+
+            if self._last_yield_id != yield_sign.id:
+                # print(f"Vehicle {actor.id} detected yield sign {yield_sign.id}")
+                self._last_yield_id = yield_sign.id
+            return True
+
+        self._last_yield_id = -1
+        return False
+
     def _vehicle_obstacle_detected(self, vehicle_list=None, max_distance=None, up_angle_th=90, low_angle_th=0, lane_offset=0):
         """
         Method to check if there is a vehicle in front of the agent blocking its path.
@@ -321,15 +445,26 @@ class BasicAgent(object):
             :param max_distance: max freespace to check for obstacles.
                 If None, the base threshold value is used
         """
+
         def get_route_polygon():
-            route_bb = []
             extent_y = self._vehicle.bounding_box.extent.y
             r_ext = extent_y + self._offset
             l_ext = -extent_y + self._offset
+
+            # Widen the detection zone to the left only when approaching the junction,
+            # so the entering vehicle can see ring traffic coming from the left.
+            # Do NOT widen when already on the ring (ego_wpt.is_junction) — that would
+            # cause ring vehicles to sweep over entry roads and incorrectly yield to
+            # entering traffic that they have priority over.
+            if is_approaching_junction:
+                l_ext -= self._lateral_yield_distance
+
             r_vec = ego_transform.get_right_vector()
             p1 = ego_location + carla.Location(r_ext * r_vec.x, r_ext * r_vec.y)
             p2 = ego_location + carla.Location(l_ext * r_vec.x, l_ext * r_vec.y)
-            route_bb.extend([[p1.x, p1.y, p1.z], [p2.x, p2.y, p2.z]])
+
+            right_points = [[p1.x, p1.y]]
+            left_points = [[p2.x, p2.y]]
 
             for wp, _ in self._local_planner.get_plan():
                 if ego_location.distance(wp.transform.location) > max_distance:
@@ -338,12 +473,14 @@ class BasicAgent(object):
                 r_vec = wp.transform.get_right_vector()
                 p1 = wp.transform.location + carla.Location(r_ext * r_vec.x, r_ext * r_vec.y)
                 p2 = wp.transform.location + carla.Location(l_ext * r_vec.x, l_ext * r_vec.y)
-                route_bb.extend([[p1.x, p1.y, p1.z], [p2.x, p2.y, p2.z]])
+                right_points.append([p1.x, p1.y])
+                left_points.append([p2.x, p2.y])
 
             # Two points don't create a polygon, nothing to check
-            if len(route_bb) < 3:
+            if len(right_points) < 2:
                 return None
 
+            route_bb = right_points + left_points[::-1]
             return Polygon(route_bb)
 
         if self._ignore_vehicles:
@@ -351,6 +488,10 @@ class BasicAgent(object):
 
         if not vehicle_list:
             vehicle_list = self._world.get_actors().filter("*vehicle*")
+
+        # NPC mode flag — filtering moved into the per-vehicle loop below
+        # so NPCs on merging/adjacent lanes are still detected.
+        _is_npc_mode = getattr(self, '_npc_mode', False)
 
         if not max_distance:
             max_distance = self._base_vehicle_threshold
@@ -363,13 +504,37 @@ class BasicAgent(object):
         if ego_wpt.lane_id < 0 and lane_offset != 0:
             lane_offset *= -1
 
+        # Detect if we are approaching a junction to increase look-ahead
+        incoming_wp = None
+        if not ego_wpt.is_junction:
+            try:
+                for step in range(1, 21):
+                    incoming_wp, _ = self._local_planner.get_incoming_waypoint_and_direction(steps=step)
+                    if incoming_wp and incoming_wp.is_junction:
+                        break
+            except Exception:
+                pass
+
+        if ego_wpt.is_junction or (incoming_wp and incoming_wp.is_junction):
+            if max_distance < 30.0:
+                max_distance = 30.0
+
         # Get the transform of the front of the ego
         ego_front_transform = ego_transform
         ego_front_transform.location += carla.Location(
             self._vehicle.bounding_box.extent.x * ego_transform.get_forward_vector())
 
         opposite_invasion = abs(self._offset) + self._vehicle.bounding_box.extent.y > ego_wpt.lane_width / 2
-        use_bbs = self._use_bbs_detection or opposite_invasion or ego_wpt.is_junction
+        is_approaching_junction = incoming_wp and incoming_wp.is_junction
+        use_bbs = (
+            self._use_bbs_detection
+            or opposite_invasion
+            or ego_wpt.is_junction
+            or is_approaching_junction
+        )
+
+        # Detect if we are at a yield sign
+        ego_at_yield_sign = self._affected_by_yield_sign(self._vehicle, max_distance)
 
         # Get the route bounding box
         route_polygon = get_route_polygon()
@@ -384,16 +549,160 @@ class BasicAgent(object):
 
             target_wpt = self._map.get_waypoint(target_transform.location, lane_type=carla.LaneType.Any)
 
+            # NPC mode: skip other NPCs only when ego is physically inside the
+            # junction AND the vehicles are heading in opposite directions
+            # (genuine deadlock risk — two NPCs facing each other on the same
+            # one-way segment).  Same-direction ring followers must NOT be
+            # skipped; they need normal car-following so they don't rear-end.
+            if _is_npc_mode and target_vehicle.attributes.get('role_name', '') == 'npc':
+                if ego_wpt.is_junction and (
+                    target_wpt.road_id == ego_wpt.road_id
+                    and target_wpt.lane_id == ego_wpt.lane_id
+                ):
+                    ego_fwd = ego_transform.get_forward_vector()
+                    tgt_fwd = target_transform.get_forward_vector()
+                    # Only skip if heading in opposite directions (dot < 0)
+                    if ego_fwd.x * tgt_fwd.x + ego_fwd.y * tgt_fwd.y < 0:
+                        continue
+
             # General approach for junctions and vehicles invading other lanes due to the offset
             if (use_bbs or target_wpt.is_junction) and route_polygon:
 
                 target_bb = target_vehicle.bounding_box
                 target_vertices = target_bb.get_world_vertices(target_vehicle.get_transform())
-                target_list = [[v.x, v.y, v.z] for v in target_vertices]
-                target_polygon = Polygon(target_list)
+                target_list = [[v.x, v.y] for v in target_vertices]
+
+                from shapely.geometry import MultiPoint
+
+                # Project the target polygon forward based on its velocity to create a swept volume
+                target_vel = target_vehicle.get_velocity()
+                target_speed = target_vel.length()
+                if target_speed > 0.5:
+                    # Use 3.0s projection at junctions to stop early without flying off curves
+                    projection_time = (
+                        3.0
+                        if (
+                            ego_at_yield_sign
+                            or is_approaching_junction
+                            or ego_wpt.is_junction
+                        )
+                        else 2.0
+                    )
+                    target_list.extend(
+                        [
+                            [
+                                v[0] + target_vel.x * projection_time,
+                                v[1] + target_vel.y * projection_time,
+                            ]
+                            for v in target_list
+                        ]
+                    )
+
+                target_polygon = MultiPoint(target_list).convex_hull
 
                 if route_polygon.intersects(target_polygon):
-                    return (True, target_vehicle, compute_distance(target_vehicle.get_location(), ego_location))
+                    # PRIORITY ARBITRATION:
+                    if ego_at_yield_sign or ego_wpt.is_junction:
+                        if ego_wpt.is_junction and not ego_at_yield_sign:
+                            # Ring rule (right-hand traffic): vehicles already on the ring
+                            # have priority over vehicles entering from approach roads.
+                            # Skip target if it is not yet inside the junction.
+                            if not target_wpt.is_junction:
+                                continue
+                            # Fallback: if the map has yield signs, honour them too.
+                            if self._affected_by_yield_sign(target_vehicle, max_distance):
+                                continue
+
+                        # ASYMMETRIC PRIORITY: Yield to vehicles coming from the left in roundabouts.
+                        ego_yaw = math.radians(ego_transform.rotation.yaw)
+                        diff = target_transform.location - ego_location
+                        target_yaw = math.atan2(diff.y, diff.x)
+                        relative_yaw = math.degrees(target_yaw - ego_yaw)
+                        if relative_yaw > 180:
+                            relative_yaw -= 360
+                        if relative_yaw < -180:
+                            relative_yaw += 360
+
+                        # Yield to circular traffic from the left. At a yield sign, also yield from the right.
+                        if (-120 < relative_yaw < -15) or (
+                            ego_at_yield_sign and 15 < relative_yaw < 120
+                        ):
+                            pass  # Yield to cross traffic!
+                        else:
+                            # Vehicle is roughly ahead or to the right.
+                            # For ring-ring following (both inside the junction), the polygon
+                            # already confirmed the target is in our path.  The road_id-based
+                            # target_on_path check is unreliable inside junctions (each arc has
+                            # its own road_id), so use a dot-product same-direction check instead.
+                            if ego_wpt.is_junction and target_wpt.is_junction:
+                                _ef = ego_transform.get_forward_vector()
+                                _tf = target_transform.get_forward_vector()
+                                if _ef.x * _tf.x + _ef.y * _tf.y > 0.5:
+                                    pass  # same-direction ring follower — polygon confirmed, don't skip
+                                else:
+                                    continue  # opposite/crossing junction vehicle — skip
+                            else:
+                                # Off-junction: require an exact road/lane match within the plan.
+                                target_on_path = False
+                                for wp, _ in self._local_planner.get_plan():
+                                    if ego_location.distance(wp.transform.location) > 15.0:
+                                        break
+                                    if (
+                                        wp.road_id == target_wpt.road_id
+                                        and wp.lane_id == target_wpt.lane_id
+                                    ):
+                                        target_on_path = True
+                                        break
+                                if not target_on_path:
+                                    continue
+
+                    return (
+                        True,
+                        target_vehicle,
+                        compute_distance(target_vehicle.get_location(), ego_location),
+                    )
+
+                # Fallback: if the polygon geometry missed a junction vehicle,
+                # entering vehicles still must yield to ring traffic.
+                # Any junction vehicle within detection range that is NOT
+                # directly behind us (>150 deg) is returned as an obstacle;
+                # car_following_manager's dot-product logic then decides speed.
+                elif ego_wpt.is_junction and target_wpt.is_junction:
+                    # Polygon missed a ring-ring follower (tight curve geometry).
+                    # Fall back to the same angle/distance check as the simplified path.
+                    _tgt_fwd = target_transform.get_forward_vector()
+                    _tgt_ext = target_vehicle.bounding_box.extent.x
+                    _tgt_rear = target_transform
+                    _tgt_rear.location -= carla.Location(
+                        x=_tgt_ext * _tgt_fwd.x,
+                        y=_tgt_ext * _tgt_fwd.y,
+                    )
+                    if is_within_distance(
+                        _tgt_rear, ego_front_transform, max_distance, [low_angle_th, up_angle_th]
+                    ):
+                        return (
+                            True,
+                            target_vehicle,
+                            compute_distance(target_transform.location, ego_transform.location),
+                        )
+                elif (
+                    is_approaching_junction
+                    and not ego_wpt.is_junction
+                    and target_wpt.is_junction
+                ):
+                    _ego_yaw = math.radians(ego_transform.rotation.yaw)
+                    _diff = target_transform.location - ego_location
+                    _rel_yaw = math.degrees(math.atan2(_diff.y, _diff.x) - _ego_yaw)
+                    if _rel_yaw > 180:
+                        _rel_yaw -= 360
+                    if _rel_yaw < -180:
+                        _rel_yaw += 360
+                    if -150 < _rel_yaw < 150:  # not directly behind us
+                        return (
+                            True,
+                            target_vehicle,
+                            compute_distance(target_vehicle.get_location(), ego_location),
+                        )
 
             # Simplified approach, using only the plan waypoints (similar to TM)
             else:

@@ -1,8 +1,12 @@
 # ---------------------------
 # Configuration
 # ---------------------------
+ifneq (,$(wildcard .env))
+include .env
+endif
+
 ENV_NAME := rirun
-PYTHON_VERSION := 3.8
+PYTHON_VERSION ?= 3.8
 CUDA_VERSION := 12.1
 
 CONDA := conda
@@ -40,6 +44,18 @@ env.cuda:
 # ---------------------------
 install:
 	$(CONDA) run -n $(ENV_NAME) $(PIP) install -e .
+	@if [ -f .env ]; then . ./.env; fi; \
+	PYTHON_VERSION="$${PYTHON_VERSION:-$(PYTHON_VERSION)}"; \
+	if [ -n "$$CARLA_ROOT" ]; then \
+		python_tag="cp$$(printf '%s' "$$PYTHON_VERSION" | tr -d .)"; \
+		carla_wheel=$$(find "$$CARLA_ROOT/PythonAPI/carla/dist" -maxdepth 1 -name "carla-*-$$python_tag-$$python_tag-*.whl" | head -n 1); \
+		if [ -z "$$carla_wheel" ]; then \
+			echo "ERROR: Could not find $$CARLA_ROOT/PythonAPI/carla/dist/carla-*-$$python_tag-$$python_tag-*.whl"; \
+			exit 1; \
+		fi; \
+		$(CONDA) run -n $(ENV_NAME) $(PIP) install --force-reinstall "$$carla_wheel"; \
+		echo "→ Installed CARLA Python wheel: $$carla_wheel"; \
+	fi
 # install traj_convert from GitHub
 	@bash build-scripts/install-traj_convert.sh $(CONDA) $(ENV_NAME) $(PIP)
 # install pre-trained weights

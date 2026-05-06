@@ -26,6 +26,7 @@ class Vehicle(Actor):
         movement: Union[str, MovementPolicy] = "pid",
         blueprint: str = "model3",
         deviation_statistics: Optional[str] = None,
+        role_name: str = "npc",
     ) -> None:
         """
         Initialize an actor with a specified trajectory, movement policy, and vehicle blueprint.
@@ -58,6 +59,8 @@ class Vehicle(Actor):
         self._world = world
         blueprint_library = world.get_blueprint_library()
         self._blueprint = blueprint_library.filter(blueprint)[0]
+        if self._blueprint.has_attribute("role_name"):
+            self._blueprint.set_attribute("role_name", role_name)
 
         if isinstance(trajectory, Trajectory):
             assert (
@@ -69,6 +72,7 @@ class Vehicle(Actor):
         else:
             self._xml_path = trajectory
             self.first_trajectory_point = get_first_xml_waypoint(self._xml_path)
+            self._current_trajectory_point = self.first_trajectory_point
 
         # Movement strategy
         if isinstance(movement, MovementPolicy):
@@ -108,6 +112,8 @@ class Vehicle(Actor):
         Args:
             simulation_time (float): The current world time
         """
+        if self._destroyed:
+            return
         self._mover.step(self, simulation_time, self._deviation_statistics)
 
     def spawn(self, transform: carla.Transform = None) -> None:
@@ -117,20 +123,51 @@ class Vehicle(Actor):
             transform (carla.Transform): The location and rotation at which the vehicle should spawn.
         """
         if transform is None:
-            transform = self.first_trajectory_point.transform
-            transform.location.z = 0.1
+            loc = self.first_trajectory_point.transform.location
+            rot = self.first_trajectory_point.transform.rotation
+            transform = carla.Transform(carla.Location(loc.x, loc.y, 0.3), rot)
 
-        self._actor = self._world.spawn_actor(self._blueprint, transform)
-        self._mover.on_spawn(self)
-        logging.info(
-            f"Spawned vehicle {self.name} at {transform} [{self._mover.__class__.__name__}]"
+        # Safety pre-check: if another vehicle is already occupying the spawn area,
+        # return without spawning so the movement policy retries on the next tick.
+        _safe_radius = 8.0
+        nearby = [
+            a for a in self._world.get_actors().filter("*vehicle*")
+            if a.get_location().distance(transform.location) < _safe_radius
+        ]
+        if nearby:
+            logging.debug(
+                f"{self.name}: spawn location occupied by vehicle {nearby[0].id} "
+                f"({nearby[0].type_id}), delaying spawn."
+            )
+            return  # _spawned stays False; movement policy will retry next tick
+
+        for z_delta in [0.0, 0.5, 1.0, 2.0, 4.0]:
+            attempt = carla.Transform(
+                carla.Location(transform.location.x, transform.location.y, transform.location.z + z_delta),
+                transform.rotation,
+            )
+            actor = self._world.try_spawn_actor(self._blueprint, attempt)
+            if actor is not None:
+                self._actor = actor
+                self._mover.on_spawn(self)
+                logging.info(
+                    f"Spawned vehicle {self.name} at {attempt} [{self._mover.__class__.__name__}]"
+                )
+                self._spawned = True
+                return
+
+        logging.error(
+            f"Could not spawn vehicle {self.name} at {transform} (collision at all z offsets). Skipping."
         )
-        self._spawned = True
+        self._destroyed = True  # mark as failed so it is excluded from active_vehicles
+        return
 
     def destroy(self) -> None:
         """
         Destroy the vehicle, throw AssertionError on failure
         """
+        if self._actor is None:
+            return  # never successfully spawned
         assert self._actor.destroy(), f"Could not destroy Vehicle {self.name}."
         self._destroyed = True
         if self._deviation_statistics is not None:
@@ -192,8 +229,82 @@ class Vehicle(Actor):
 
         if self._destroyed:
             return True  # If the vehicle is destroyed, we consider the z-coordinate to be valid by default.
+        if not getattr(self._mover, 'validate_z', True):
+            return True  # Physics-enabled movement manages z itself; skip the check.
         if self._spawned:
             current_position = self.get_actor().get_transform().location
             return current_position.z >= z_min
         else:
             return True  # If the vehicle is not spawned, we consider the z-coordinate to be valid by default.
+
+
+def spawn_behavior_npcs(
+    world: carla.World,
+    client,
+    num: int,
+    npc_behavior: str = "cautious",
+    min_spacing: float = 15.0,
+) -> list:
+    """
+    Spawn up to `num` roaming NPC vehicles driven by BehaviorMovement.
+
+    Vehicles are placed at well-spaced map spawn points (at least `min_spacing`
+    metres apart).  Each is created as a regular Vehicle with a BehaviorMovement
+    policy so it integrates with the normal run.py step loop.
+
+    Args:
+        world: carla.World
+        client: carla.Client  (passed through to BehaviorMovement)
+        num: maximum number of NPCs to spawn
+        npc_behavior: BehaviorAgent behavior string ("cautious"/"normal"/"aggressive")
+        min_spacing: minimum distance (m) between chosen spawn points
+
+    Returns:
+        List of Vehicle instances (already stepped once to trigger spawning).
+    """
+    from rirun.kinetics.movement import BehaviorMovement
+    import random
+
+    spawn_points = world.get_map().get_spawn_points()
+    random.shuffle(spawn_points)
+
+    chosen = []
+    for sp in spawn_points:
+        if len(chosen) >= num:
+            break
+        if all(sp.location.distance(c.location) >= min_spacing for c in chosen):
+            chosen.append(sp)
+
+    if len(chosen) < num:
+        logging.warning(
+            f"spawn_behavior_npcs: could only find {len(chosen)} spawn points "
+            f"with {min_spacing} m spacing for {num} requested NPCs."
+        )
+
+    npcs = []
+    blueprint_library = world.get_blueprint_library()
+    car_bps = blueprint_library.filter("vehicle.*")
+    # exclude bikes / motorcycles for stability
+    car_bps = [bp for bp in car_bps if int(bp.get_attribute("number_of_wheels").as_int()) == 4]
+
+    for i, sp in enumerate(chosen):
+        bp = random.choice(car_bps)
+        if bp.has_attribute("role_name"):
+            bp.set_attribute("role_name", "npc")
+        mover = BehaviorMovement(client, behavior=npc_behavior)
+        # We need a dummy Trajectory-like first_trajectory_point; use spawn point
+        from rirun.kinetics.trajectory import CarlaTrajectoryPoint
+        dummy_traj_point = CarlaTrajectoryPoint(transform=sp, time=0.0, speed=0.0)
+
+        v = Vehicle.__new__(Vehicle)
+        v.name = f"behavior_npc_{i}"
+        v._world = world
+        v._blueprint = bp
+        v.first_trajectory_point = dummy_traj_point
+        v._mover = mover
+        v._spawned = False
+        v._destroyed = False
+        v._deviation_statistics = None
+        npcs.append(v)
+
+    return npcs

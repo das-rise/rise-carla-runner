@@ -307,35 +307,35 @@ def log_simulation_provenance(
     else:
         input_provenance_files = None
 
-    mode_string = "real trajectories" if args.trajectory_filepaths else ""
+    mode_string = "real trajectories" if args.npc_trajectory_filepaths else ""
     mode_string += (
         " and autonomous agents"
-        if args.pcla_agent and mode_string
+        if args.ego_agent and mode_string
         else "autonomous agents"
-        if args.pcla_agent
+        if args.ego_agent
         else ""
     )
 
     raw_inputs = []
     raw_input_formats = []
 
-    if args.trajectory_filepaths:
-        raw_inputs.extend(args.trajectory_filepaths)
-        raw_input_formats.extend(["CSV"] * len(args.trajectory_filepaths))
+    if args.npc_trajectory_filepaths:
+        raw_inputs.extend(args.npc_trajectory_filepaths)
+        raw_input_formats.extend(["CSV"] * len(args.npc_trajectory_filepaths))
 
     if args.map_filepath:
         raw_inputs.append(args.map_filepath)
         raw_input_formats.append("OpenDrive/Carla map")
 
-    if args.pcla_route:
-        raw_inputs.append(args.pcla_route)
+    if args.ego_route_filepath:
+        raw_inputs.append(args.ego_route_filepath)
         raw_input_formats.append("XML")
 
     inputs = raw_inputs
     input_formats = raw_input_formats
     chain = ProvenanceChain.create(
         entity_id=entity_id,
-        initial_source=args.trajectory_filepaths,
+        initial_source=args.npc_trajectory_filepaths,
         description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
         tags=[
             "RIRUN",
@@ -343,6 +343,8 @@ def log_simulation_provenance(
             "Synergies",
         ],
     )
+
+    _record_modes = list(args.record_cameras) if args.record_cameras else []
 
     chain.add(
         started_at=run_start_time,
@@ -353,10 +355,8 @@ def log_simulation_provenance(
         operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
         inputs=inputs,
         input_formats=input_formats,
-        outputs=[
-            args.output_dir + f"/traj/traj_{start_ts}.parquet",
-            args.output_dir + f"/camera/camera_{start_ts}.mp4",
-        ],
+        outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
+        + [f"{args.output_dir}/{_mode}_{start_ts}.mp4" for _mode in _record_modes],
         output_formats=["Parquet", "MP4"],
         input_provenance_files=input_provenance_files,
         capture_environment=True,

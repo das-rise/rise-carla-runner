@@ -2,6 +2,12 @@
 
 ## Setup
 
+First, copy the example environment file and adjust it to your setup:
+
+```bash
+cp .env.example .env
+```
+
 Make sure you have `conda` installed. Then, install all required dependencies with
 
 ```bash
@@ -52,6 +58,18 @@ _Build and start:_
 bash docker/start-carla-docker.sh
 ```
 
+To start the container with a locally built `Carla` package instead of the `carlasim/carla:0.9.15` runtime files, set `CARLA_ROOT` in `.env`. The directory must contain `CarlaUE4.sh` and `PythonAPI/carla/dist/carla-*.whl`. Use `PYTHON_VERSION` to select the matching Python API wheel when the build contains multiple wheels, for example `PYTHON_VERSION="3.8"` selects `PythonAPI/carla/dist/carla-*-cp38-cp38-*.whl`.
+
+```bash
+# .env
+CARLA_ROOT="/path/to/CARLA"
+PYTHON_VERSION="3.8"
+```
+
+```bash
+bash docker/start-carla-docker.sh
+```
+
 _Stop:_
 And stop it:
 
@@ -71,7 +89,7 @@ bash docker/stop-carla-docker.sh
 Execute:
 
 ```bash
-python src/rirun/run.py 15 Town01 scenes/town01/npc_test_routes/vehicle1_straight.csv --movement teleport --timestep 0.0333333333333333333 --pcla_agent neat_aim2ddepth --pcla_route scenes/town01/agent_routes/agent_turn.xml --camera_mode ego
+python src/rirun/run.py 15 Town01 --npc_trajectory_filepaths scenes/town01/npc_test_routes/vehicle1_straight.csv --npc_movement teleport --timestep 0.0333333333333333333 --ego_agent neat_aim2ddepth --ego_route_filepath scenes/town01/agent_routes/agent_turn.xml --record_cameras ego_overhead
 ```
 
 will use the `PCLA` agent `NEAT_AIM2DDEPTH`, primed to follow the route in agent_turn.xml, with the camera attached to the `ego_vehicle`.

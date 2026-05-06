@@ -2,8 +2,10 @@
 Tools essential for manipulating Carla from the client-side
 """
 
-import carla
 import logging
+
+import carla
+
 from rirun.carla_agents.navigation.global_route_planner import GlobalRoutePlanner
 
 
@@ -131,7 +133,7 @@ def _load_from_carla_map(client: carla.Client, map_name: str) -> carla.World:
     logging.info(f"Loading world from CARLA map {map_name}...")
     try:
         return client.load_world(map_name)
-    except RuntimeError as e:
+    except RuntimeError:
         logging.error(f"Failed to load CARLA map {map_name}")
         logging.error(
             "Ensure that the map name is correct and the map is available server-side."

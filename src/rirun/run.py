@@ -15,6 +15,7 @@ from rich_argparse import RichHelpFormatter
 from traj_convert.carla2traj import Carla2Traj
 
 from rirun.kinetics.movement import BehaviorMovement, PCLA_Movement
+from rirun.kinetics.scene_object_entropy import SceneObjectEntropyTracker
 from rirun.kinetics.trajectory_utils import process_trajectory_file
 from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
@@ -188,6 +189,11 @@ def parse_arguments():
         help="Choice of trajectory deviation statistics to compute during the run.",
     )
     parser.add_argument(
+        "--scene_object_entropy_debug",
+        action="store_true",
+        help="Log the raw actor and environment-object inventory seen by the scene entropy tracker.",
+    )
+    parser.add_argument(
         "--heading_interpolation_mode",
         type=str,
         choices=["straight", "spline"],
@@ -359,7 +365,7 @@ def log_simulation_provenance(
         input_formats=input_formats,
         outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
         + [f"{args.output_dir}/{_mode}_{start_ts}.mp4" for _mode in _record_modes],
-        output_formats=["Parquet", "MP4"],
+        output_formats=["Parquet"] + ["MP4"] * len(_record_modes),
         input_provenance_files=input_provenance_files,
         capture_environment=True,
     )
@@ -426,6 +432,11 @@ def main() -> None:
     world.apply_settings(settings)
 
     logging.info(f"Carla world settings: \n{world.get_settings()}")
+
+    scene_object_entropy_tracker = SceneObjectEntropyTracker(
+        world,
+        debug=args.scene_object_entropy_debug,
+    )
 
     # Setup trajectory recorder
     traj_recorder = Carla2Traj(world, debug=False)
@@ -553,10 +564,12 @@ def main() -> None:
 
         # Start at t=0 relative to spawn, plus potential offset
         active_vehicles = []
+        scene_object_entropy_tracker.start()
 
         # step vehicles once to spawn those that spawn at the start
         for v in vehicles:
             v.step(adjusted_elapsed_sim_seconds)
+        scene_object_entropy_tracker.sample()
 
         ## CAMERA
 
@@ -657,6 +670,7 @@ def main() -> None:
             active_vehicles = [
                 v for v in vehicles if not v._destroyed and v.is_spawned()
             ]
+            scene_object_entropy_tracker.sample()
 
             # Reattach any ego_overhead/ego_dashcam cameras whose target was destroyed
             if active_vehicles:
@@ -707,6 +721,7 @@ def main() -> None:
         success = False
 
     finally:
+        scene_object_entropy_tracker.stop()
         if spinner is not None:
             spinner.stop()
         logging.info(
@@ -723,6 +738,7 @@ def main() -> None:
         traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
 
         spinner.stop()
+        scene_object_entropy_tracker.log_summary()
 
         if display_screen is not None:
             _pg.quit()

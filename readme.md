@@ -2,6 +2,21 @@
 
 **RiRun** (RISE Carla Runner) is a tool for creating parametrizable driving scenarios in the [Carla](https://carla.org/) simulator from real-world automotive trajectory data. It supports multiple autonomous driving agents via the [PCLA](https://github.com/MasoudJTehrani/PCLA) framework, trajectory replay with different movement modes, and can export simulation results as `.parquet` files which can then be converted to [ASAM OSI](https://www.asam.net/standards/detail/osi/) using the [`osi-gen`](https://github.com/das-rise/osi-gen) tool.
 
+> [!NOTE]
+> This open source project is developed by [RISE Research Institutes of Sweden](https://ri.se/). See license file for open source license information.
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Getting Carla set up in a container](#getting-carla-set-up-in-a-container)
+  - [Building, starting and stopping the Carla container](#building-starting-and-stopping-the-carla-container)
+- [Example run](#example-run)
+- [Processing `.parquet` trajectories](#processing-parquet-trajectories)
+- [PCLA agent route generation](#pcla-agent-route-generation)
+- [PCLA addendum](#pcla-addendum)
+- [Acknowledgments](#acknowledgments)
+
 ## Prerequisites
 
 - **Python 3.8** (required — see `requires-python` in `pyproject.toml`)
@@ -147,3 +162,11 @@ Then, place waypoints by clicking on the map and then adjusting the waypoint ang
 ## PCLA addendum
 
 This repository contains an edited version of the `PCLA` [repository](https://github.com/MasoudJTehrani/PCLA).
+
+## Acknowledgments
+
+This software was developed as part of the [Synergies](https://synergies-ccam.eu/) project.
+
+![Synergies-logo](media/synergies.png)
+
+Funded by the European Union. Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or European Climate, Infrastructure and Environment Executive Agency (CINEA). Neither the European Union nor the granting authority can be held responsible for them.

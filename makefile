@@ -23,7 +23,7 @@ help:
 	@echo "  make env.cuda      Install CUDA-enabled PyTorch"
 	@echo "  make install       Install project (core deps)"
 	@echo "  make install-dev   Install project with dev extras"
-	@echo "  make hooks         Install pre-commit hooks (run after install-dev)"
+	@echo "  make hooks         Install pre-commit hooks (automatically run by install-dev)"
 	@echo "  make clean         Remove conda environment"
 	@echo "  make rebuild       Clean + full reinstall"
 

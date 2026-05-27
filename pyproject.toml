@@ -41,6 +41,7 @@ dependencies = [
   "rdp==0.8",
   "dataprov>=3.2",
   "xodr-plot @ file:helpers/xodr_plot",
+  "traj_convert @ git+https://github.com/das-rise/osi-gen",
 ]
 
 [project.optional-dependencies]

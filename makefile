@@ -57,8 +57,6 @@ install:
 		$(CONDA) run -n $(ENV_NAME) $(PIP) install --force-reinstall "$$carla_wheel"; \
 		echo "→ Installed CARLA Python wheel: $$carla_wheel"; \
 	fi
-# install traj_convert from GitHub
-	@bash build-scripts/install-traj_convert.sh $(CONDA) $(ENV_NAME) $(PIP)
 # install pre-trained weights
 	@bash build-scripts/install-weights.sh
 	@echo "→ Installed project (core dependencies)"

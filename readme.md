@@ -134,10 +134,10 @@ python src/rirun/run.py --help
 
 ## Processing `.parquet` trajectories
 
-`make install` (which is run, for example, by `make rebuild`) will also install [`traj-convert`](https://github.com/das-rise/osi-gen), a python package that is used for creating `.parquet` files for every simulation run. These `.parquet` files can then be exported to `OSI` files compatible with the `Omega Prime` file format used in the Synergies project.
+`make install` (which is run, for example, by `make rebuild`) will also install [`traj-convert`](https://github.com/das-rise/osi-gen), a python package that is used for creating `.parquet` files recording trajectories in the simulation for every simulation run. These `.parquet` files can then be exported to `OSI` files compatible with the `Omega Prime` file format used in the Synergies project.
 
 > [!NOTE]
-> The `traj_convert` command-line utility requires Python 3.10+ and will not work inside the `rirun` conda environment (Python 3.8). Install it in a separate Python 3.10+ environment.
+> The `traj_convert` *command-line utility* to convert from `.parquet` to `.osi` or `Omega Prime` requires Python 3.10+ and will not work inside the `rirun` conda environment (Python 3.8). Install it in a separate Python 3.10+ environment.
 
 To convert a `.parquet` file to `OSI`, run the following (in a Python 3.10+ environment with `traj-convert` installed):
 

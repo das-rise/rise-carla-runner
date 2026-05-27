@@ -1,3 +1,7 @@
+. helpers/docker-quick.sh
+
+carla_docker_restart
+
 python src/rirun/run.py \
     15 \
     Town01 \

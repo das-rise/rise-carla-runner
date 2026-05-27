@@ -15,7 +15,7 @@ PIP := pip
 # ---------------------------
 # Phony targets
 # ---------------------------
-.PHONY: help env.create env.cuda install install-dev clean rebuild
+.PHONY: help env.create env.cuda install install-dev clean rebuild hooks
 
 help:
 	@echo "Available targets for RISE-Carla-Runner:"
@@ -23,6 +23,7 @@ help:
 	@echo "  make env.cuda      Install CUDA-enabled PyTorch"
 	@echo "  make install       Install project (core deps)"
 	@echo "  make install-dev   Install project with dev extras"
+	@echo "  make hooks         Install pre-commit hooks (run after install-dev)"
 	@echo "  make clean         Remove conda environment"
 	@echo "  make rebuild       Clean + full reinstall"
 
@@ -64,7 +65,12 @@ install:
 
 install-dev: install
 	$(CONDA) run -n $(ENV_NAME) $(PIP) install -e ".[train,dev]"
+	$(MAKE) hooks
 	@echo "→ Installed project (development dependencies)"
+
+hooks:
+	$(CONDA) run -n $(ENV_NAME) pre-commit install
+	@echo "→ Installed pre-commit hooks"
 
 # ---------------------------
 # Cleanup

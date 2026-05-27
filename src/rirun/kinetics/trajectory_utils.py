@@ -1,6 +1,8 @@
-from rirun.kinetics.trajectory import Trajectory, CarlaTrajectoryPoint
 import xml.etree.ElementTree as ET
+
 import carla
+
+from rirun.kinetics.trajectory import CarlaTrajectoryPoint, Trajectory
 
 
 def process_trajectory_file(

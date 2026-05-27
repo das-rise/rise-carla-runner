@@ -1,15 +1,17 @@
+import atexit
 import logging
 import os
-from datetime import datetime
-from typing import Tuple, Optional, List
-import pygame
-import numpy as np
-import carla
-import cv2
 import queue
 import threading
-import atexit
 import time
+from datetime import datetime
+from typing import List, Optional, Tuple
+
+import carla
+import cv2
+import numpy as np
+import pygame
+
 from rirun.kinetics.vehicle_tools import Actor
 
 
@@ -44,9 +46,7 @@ class WindowedBirdseyeCamera:
             carla.Location(x=loc[0], y=loc[1], z=loc[2]),
             carla.Rotation(pitch=270, yaw=0.0, roll=0),
         )
-        self._camera = world.spawn_actor(
-            camera_bp, camera_transform
-        )
+        self._camera = world.spawn_actor(camera_bp, camera_transform)
 
         # Initialize the display window
         self._screen = pygame.display.set_mode((self._width, self._height))
@@ -174,7 +174,9 @@ class StreamingCamera:
             target = None
             attachment = carla.AttachmentType.Rigid
 
-        self._camera = world.spawn_actor(bp, tf, attach_to=target, attachment_type=attachment)
+        self._camera = world.spawn_actor(
+            bp, tf, attach_to=target, attachment_type=attachment
+        )
 
         # Atexit
         self._writer_thread = None
@@ -223,7 +225,9 @@ class StreamingCamera:
     # ---------- Internals ----------
 
     @staticmethod
-    def _ego_camera_transform(actor, display_camera: str, overhead_camera_position=None):
+    def _ego_camera_transform(
+        actor, display_camera: str, overhead_camera_position=None
+    ):
         """
         Return (carla.Transform, carla.AttachmentType, fov_str) for the given display camera.
 
@@ -419,7 +423,9 @@ class StreamingCamera:
             self._overhead_camera_position,
         )
         bp.set_attribute("fov", fov)
-        self._camera = self._world.spawn_actor(bp, tf, attach_to=ego_vehicle.get_actor(), attachment_type=attachment)
+        self._camera = self._world.spawn_actor(
+            bp, tf, attach_to=ego_vehicle.get_actor(), attachment_type=attachment
+        )
 
         if was_listening:
             self._camera.listen(lambda image: self._process_image(image))

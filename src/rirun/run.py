@@ -1,25 +1,28 @@
 import argparse
+import logging
+import math
 import os
 import random
-import time
-from datetime import datetime, timezone
-import numpy as np
-from rich_argparse import RichHelpFormatter
 import signal
 import sys
-import logging
-import subprocess
+import threading as _threading
+import time
+from datetime import datetime, timezone
+
 import carla
-from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
-from rirun.kinetics.movement import PCLA_Movement, BehaviorMovement
-from rirun.kinetics.trajectory_utils import process_trajectory_file
-from rirun.utils.video_tools import StreamingCamera
-from rirun.utils.spinner import Spinner
-from rirun.utils.bling import rirun
-import math
-from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
+import numpy as np
+from rich_argparse import RichHelpFormatter
 from traj_convert.carla2traj import Carla2Traj
+
+from rirun.kinetics.movement import BehaviorMovement, PCLA_Movement
+from rirun.kinetics.scene_object_entropy import SceneObjectEntropyTracker
+from rirun.kinetics.trajectory_utils import process_trajectory_file
+from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
+from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
+from rirun.utils.bling import rirun
 from rirun.utils.carla_tools import load_map
+from rirun.utils.spinner import Spinner
+from rirun.utils.video_tools import StreamingCamera
 
 # Helper functions
 
@@ -28,7 +31,6 @@ def timestamp_now_dataprov() -> str:
     """Returns the current timestamp in ISO 8601 format for use with dataprov."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-import threading as _threading
 
 _stop_event = _threading.Event()
 
@@ -54,23 +56,6 @@ def signal_handler(sig: signal.Signals, frame) -> None:
     else:
         logging.warning(f"Second signal {sig} received, exiting immediately.")
         os._exit(1)
-
-
-def execute(bash_str: str) -> None:
-    """
-    Execute given string as process.
-    Args:
-        bash_str (str): The command to execute.
-    """
-    try:
-        logging.info(f"Calling '{bash_str}'")
-        bash_str_list = bash_str.split(" ")
-        result = subprocess.run(
-            bash_str_list, check=True, capture_output=True, text=True
-        )
-        logging.info(f"Output:\n{result.stdout}")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error when running: {e}")
 
 
 def parse_arguments():
@@ -116,13 +101,13 @@ def parse_arguments():
         choices=["pid", "pid_ts", "teleport", "behavior_agent"],
         default="teleport",
         help="How vehicles move along trajectories (default: teleport). "
-             "Use 'behavior_agent' to hand off each trajectory vehicle to a BehaviorAgent "
-             "after spawning at its first trajectory position.",
+        "Use 'behavior_agent' to hand off each trajectory vehicle to a BehaviorAgent "
+        "after spawning at its first trajectory position.",
     )
     parser.add_argument(
         "--npc_behavior",
         choices=["cautious", "normal", "aggressive"],
-        default="cautious",
+        default=None,
         help="BehaviorAgent driving style used when --npc_movement behavior_agent is set (default: cautious).",
     )
     parser.add_argument(
@@ -130,7 +115,7 @@ def parse_arguments():
         choices=["ego_overhead", "stationary_overhead", "ego_dashcam"],
         default=None,
         help="Primary camera for display. If omitted, uses the first --record_cameras mode; "
-             "if neither is provided, uses stationary_overhead.",
+        "if neither is provided, uses stationary_overhead.",
     )
     parser.add_argument(
         "--record_cameras",
@@ -139,8 +124,8 @@ def parse_arguments():
         default=None,
         metavar="MODE",
         help="Record one or more camera views simultaneously: ego_dashcam, ego_overhead, stationary_overhead. "
-             "Each mode produces a separate MP4 file named camera_<mode>_<ts>.mp4. "
-             "If not specified, records only the display camera.",
+        "Each mode produces a separate MP4 file named camera_<mode>_<ts>.mp4. "
+        "If not specified, records only the display camera.",
     )
     parser.add_argument(
         "--overhead_camera_position",
@@ -149,14 +134,14 @@ def parse_arguments():
         action="append",
         metavar=("X", "Y", "Z"),
         help="Overhead camera position as X Y Z. Repeat the flag once per overhead camera mode "
-             "(ego_overhead, stationary_overhead) in the same order as --record_cameras. "
-             "A single occurrence applies to all overhead modes. "
-             "For stationary_overhead this is a fixed world position; "
-             "for ego_overhead it is a relative offset from the followed vehicle. "
-             "Example (two overhead modes, different positions): "
-             "--record_cameras ego_overhead stationary_overhead "
-             "--overhead_camera_position 0 0 50 "
-             "--overhead_camera_position 1505 -1145 100",
+        "(ego_overhead, stationary_overhead) in the same order as --record_cameras. "
+        "A single occurrence applies to all overhead modes. "
+        "For stationary_overhead this is a fixed world position; "
+        "for ego_overhead it is a relative offset from the followed vehicle. "
+        "Example (two overhead modes, different positions): "
+        "--record_cameras ego_overhead stationary_overhead "
+        "--overhead_camera_position 0 0 50 "
+        "--overhead_camera_position 1505 -1145 100",
     )
     parser.add_argument(
         "--ego_agent",
@@ -195,13 +180,18 @@ def parse_arguments():
         metavar=("X_OFFSET", "Y_OFFSET"),
         default=None,
         help="Add (x, y) offset to all trajectory coordinates before Carla conversion. "
-             "Use when trajectories were extracted with a subtracted origin (e.g. savant2rirun --offset X Y).",
+        "Use when trajectories were extracted with a subtracted origin (e.g. savant2rirun --offset X Y).",
     )
     parser.add_argument(
         "--trajectory_statistics",
         type=str,
         choices=["average_distance_true"],
         help="Choice of trajectory deviation statistics to compute during the run.",
+    )
+    parser.add_argument(
+        "--scene_object_entropy_debug",
+        action="store_true",
+        help="Log the raw actor and environment-object inventory seen by the scene entropy tracker.",
     )
     parser.add_argument(
         "--heading_interpolation_mode",
@@ -248,15 +238,15 @@ def parse_arguments():
         choices=["stop", "destroy", "roam"],
         default="stop",
         help="Behavior when an NPC BehaviorAgent completes its route: "
-             "stop (default) = brake and hold; destroy = remove from simulation; "
-             "roam = pick a new random destination and keep driving.",
+        "stop (default) = brake and hold; destroy = remove from simulation; "
+        "roam = pick a new random destination and keep driving.",
     )
     parser.add_argument(
         "--on_ego_behavior_agent_route_done",
         choices=["stop", "roam"],
         default="stop",
         help="Behavior when the ego BehaviorAgent completes its route: "
-             "stop (default) = brake and hold; roam = pick a new random destination and keep driving.",
+        "stop (default) = brake and hold; roam = pick a new random destination and keep driving.",
     )
     parser.add_argument(
         "--seed",
@@ -275,7 +265,9 @@ def parse_arguments():
     if args.ego_behavior and args.ego_agent != "behavior_agent":
         parser.error("--ego_behavior can only be used with --ego_agent behavior_agent")
     if args.npc_behavior and args.npc_movement != "behavior_agent":
-        parser.error("--npc_behavior can only be used with --npc_movement behavior_agent")
+        parser.error(
+            "--npc_behavior can only be used with --npc_movement behavior_agent"
+        )
     if not args.npc_trajectory_filepaths and not args.ego_agent:
         parser.error("At least one trajectory file or --ego_agent must be provided")
 
@@ -287,6 +279,98 @@ def parse_arguments():
             parser.error(str(e))
 
     return args
+
+
+def log_simulation_provenance(
+    run_start_time: str, args: argparse.Namespace, start_ts: str
+) -> None:
+    """Log simulation provenance using the dataprov library.
+
+    Creates a provenance chain capturing inputs, outputs, tool metadata, and
+    runtime environment, then saves it as a JSON file in the output directory.
+
+    Args:
+        run_start_time: ISO 8601 timestamp string marking when the simulation started.
+        args: Parsed command-line arguments containing simulation configuration.
+        start_ts: Timestamp string used to identify output files for this run.
+    """
+    import hashlib
+    from importlib.metadata import PackageNotFoundError, metadata
+
+    from dataprov import ProvenanceChain
+
+    unique_hash = hashlib.sha256(
+        (str(vars(args)) + str(time.time_ns())).encode()
+    ).hexdigest()
+    tool_name = "rirun"
+    try:
+        meta = metadata(tool_name)
+        tool_version = meta["Version"]
+    except PackageNotFoundError:
+        tool_version = "unknown"
+    entity_id = tool_name + "_" + unique_hash[:8]
+
+    if args.dataprov_input_provenance_files:
+        input_provenance_files = args.dataprov_input_provenance_files
+    else:
+        input_provenance_files = None
+
+    mode_string = "real trajectories" if args.npc_trajectory_filepaths else ""
+    mode_string += (
+        " and autonomous agents"
+        if args.ego_agent and mode_string
+        else "autonomous agents"
+        if args.ego_agent
+        else ""
+    )
+
+    raw_inputs = []
+    raw_input_formats = []
+
+    if args.npc_trajectory_filepaths:
+        raw_inputs.extend(args.npc_trajectory_filepaths)
+        raw_input_formats.extend(["CSV"] * len(args.npc_trajectory_filepaths))
+
+    if args.map_filepath:
+        raw_inputs.append(args.map_filepath)
+        raw_input_formats.append("OpenDrive/Carla map")
+
+    if args.ego_route_filepath:
+        raw_inputs.append(args.ego_route_filepath)
+        raw_input_formats.append("XML")
+
+    inputs = raw_inputs
+    input_formats = raw_input_formats
+    chain = ProvenanceChain.create(
+        entity_id=entity_id,
+        initial_source=args.npc_trajectory_filepaths,
+        description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
+        tags=[
+            "RIRUN",
+            "trajectory",
+            "Synergies",
+        ],
+    )
+
+    _record_modes = list(args.record_cameras) if args.record_cameras else []
+
+    chain.add(
+        started_at=run_start_time,
+        ended_at=timestamp_now_dataprov(),
+        tool_name=tool_name,
+        tool_version=tool_version,
+        arguments=" ".join(sys.argv[1:]),
+        operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
+        inputs=inputs,
+        input_formats=input_formats,
+        outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
+        + [f"{args.output_dir}/{_mode}_{start_ts}.mp4" for _mode in _record_modes],
+        output_formats=["Parquet"] + ["MP4"] * len(_record_modes),
+        input_provenance_files=input_provenance_files,
+        capture_environment=True,
+    )
+
+    chain.save(f"{args.output_dir}/{entity_id}_prov.json")
 
 
 def main() -> None:
@@ -304,10 +388,10 @@ def main() -> None:
 
     if not args.carla_address:
         carla_host = "localhost"
-        carla_ip = 2000
+        carla_port = 2000
     else:
         carla_host = args.carla_address.split(":")[0]
-        carla_ip = int(args.carla_address.split(":")[1])
+        carla_port = int(args.carla_address.split(":")[1])
 
     rirun()
 
@@ -321,7 +405,7 @@ def main() -> None:
     os.makedirs(args.output_dir + "/traj", exist_ok=True)
 
     # Connect to Carla server
-    client = carla.Client(carla_host, carla_ip)
+    client = carla.Client(carla_host, carla_port)
     world = load_map(client, args.map_filepath)
     if world is None:
         world = client.get_world()
@@ -348,6 +432,11 @@ def main() -> None:
     world.apply_settings(settings)
 
     logging.info(f"Carla world settings: \n{world.get_settings()}")
+
+    scene_object_entropy_tracker = SceneObjectEntropyTracker(
+        world,
+        debug=args.scene_object_entropy_debug,
+    )
 
     # Setup trajectory recorder
     traj_recorder = Carla2Traj(world, debug=False)
@@ -383,7 +472,7 @@ def main() -> None:
         if args.npc_movement == "behavior_agent":
             movement = BehaviorMovement(
                 client,
-                behavior=args.npc_behavior,
+                behavior=args.npc_behavior or "cautious",
                 on_route_done=args.on_npc_behavior_agent_route_done,
                 rng=_rng,
             )
@@ -448,7 +537,9 @@ def main() -> None:
 
     # Prepare BehaviorAgent roaming NPCs (optional)
     if args.num_random_behavior_npcs > 0:
-        logging.info(f"Spawning {args.num_random_behavior_npcs} BehaviorAgent NPC vehicles...")
+        logging.info(
+            f"Spawning {args.num_random_behavior_npcs} BehaviorAgent NPC vehicles..."
+        )
         behavior_npcs = spawn_behavior_npcs(
             world,
             client,
@@ -473,9 +564,12 @@ def main() -> None:
 
         # Start at t=0 relative to spawn, plus potential offset
         active_vehicles = []
+        scene_object_entropy_tracker.start()
 
         # step vehicles once to spawn those that spawn at the start
-        [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
+        for v in vehicles:
+            v.step(adjusted_elapsed_sim_seconds)
+        scene_object_entropy_tracker.sample()
 
         ## CAMERA
 
@@ -483,15 +577,16 @@ def main() -> None:
         # Determine initial ego camera target (priority: ego_agent > first NPC)
         def _pick_ego_vehicle(vehicle_list):
             for name in ("ego_agent",):
-                v = next((v for v in vehicle_list if v.name == name and v.is_spawned()), None)
+                v = next(
+                    (v for v in vehicle_list if v.name == name and v.is_spawned()), None
+                )
                 if v:
                     return v
             return next((v for v in vehicle_list if v.is_spawned()), None)
 
         _record_modes = list(args.record_cameras) if args.record_cameras else []
-        _display_mode = (
-            args.display_camera
-            or (_record_modes[0] if _record_modes else "stationary_overhead")
+        _display_mode = args.display_camera or (
+            _record_modes[0] if _record_modes else "stationary_overhead"
         )
         # Build list of camera modes to record; default to just the display camera.
         if not _record_modes:
@@ -504,9 +599,15 @@ def main() -> None:
 
         cams = []  # list of [mode, ego_vehicle_or_None, StreamingCamera]
         _positions = args.overhead_camera_position  # list of (x, y, z) or None
-        _overhead_pos_idx = 0  # counts only overhead modes; dashcam does not consume a triplet
+        _overhead_pos_idx = (
+            0  # counts only overhead modes; dashcam does not consume a triplet
+        )
         for _mode in _record_modes:
-            _cam_ego = _pick_ego_vehicle(vehicles) if _mode in ("ego_overhead", "ego_dashcam") else None
+            _cam_ego = (
+                _pick_ego_vehicle(vehicles)
+                if _mode in ("ego_overhead", "ego_dashcam")
+                else None
+            )
             # ego_dashcam uses a fixed vehicle-relative transform; overhead_camera_position does not apply.
             if _mode in ("ego_overhead", "stationary_overhead"):
                 if _positions:
@@ -533,15 +634,20 @@ def main() -> None:
             _c.start_recording()
 
         # Optional pygame display: enabled automatically when a display server is available.
-        has_attached_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        has_attached_display = bool(
+            os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+        )
         if has_attached_display:
             try:
                 import pygame as _pg
+
                 _pg.init()
                 display_screen = _pg.display.set_mode((1280, 720))
                 _pg.display.set_caption("RiRun Camera")
             except Exception as e:
-                logging.warning(f"Display detected but pygame preview could not start: {e}")
+                logging.warning(
+                    f"Display detected but pygame preview could not start: {e}"
+                )
                 display_screen = None
         else:
             logging.info("No display detected; running without live pygame preview.")
@@ -555,19 +661,27 @@ def main() -> None:
             snapshot = world.get_snapshot()
             traj_recorder.process_world_snapshot(snapshot)
             adjusted_elapsed_sim_seconds = (
-                snapshot.timestamp.elapsed_seconds - simulation_start_time + args.offset_time
+                snapshot.timestamp.elapsed_seconds
+                - simulation_start_time
+                + args.offset_time
             )
-            [v.step(adjusted_elapsed_sim_seconds) for v in vehicles]
+            for v in vehicles:
+                v.step(adjusted_elapsed_sim_seconds)
             active_vehicles = [
                 v for v in vehicles if not v._destroyed and v.is_spawned()
             ]
+            scene_object_entropy_tracker.sample()
 
             # Reattach any ego_overhead/ego_dashcam cameras whose target was destroyed
             if active_vehicles:
                 for _cam_entry in cams:
                     _cam_mode, _cam_ego, _cam = _cam_entry
                     if _cam_mode in ("ego_overhead", "ego_dashcam"):
-                        if _cam_ego is None or _cam_ego._destroyed or not _cam_ego.is_spawned():
+                        if (
+                            _cam_ego is None
+                            or _cam_ego._destroyed
+                            or not _cam_ego.is_spawned()
+                        ):
                             _new_ego = _pick_ego_vehicle(active_vehicles)
                             if _new_ego is not None:
                                 _cam.reattach(_new_ego)
@@ -597,9 +711,7 @@ def main() -> None:
                 _display_cam = cams[_display_idx][2] if cams else None
                 if _display_cam is not None and _display_cam._latest_frame is not None:
                     frame_rgb = _display_cam._latest_frame[:, :, ::-1]  # BGR -> RGB
-                    surf = _pg.surfarray.make_surface(
-                        frame_rgb.swapaxes(0, 1)
-                    )
+                    surf = _pg.surfarray.make_surface(frame_rgb.swapaxes(0, 1))
                     scaled = _pg.transform.scale(surf, display_screen.get_size())
                     display_screen.blit(scaled, (0, 0))
                     _pg.display.flip()
@@ -609,6 +721,7 @@ def main() -> None:
         success = False
 
     finally:
+        scene_object_entropy_tracker.stop()
         if spinner is not None:
             spinner.stop()
         logging.info(
@@ -617,94 +730,28 @@ def main() -> None:
         )
         spinner.update_message("Saving outputs...")
         spinner.start()
-        if 'cams' in locals():
+        if "cams" in locals():
             for _, _, _c in cams:
-                _c.stop_recording(num_ticks)  # flush all cameras to disk before proceeding
+                _c.stop_recording(
+                    num_ticks
+                )  # flush all cameras to disk before proceeding
         traj_recorder.save(args.output_dir + f"/traj/traj_{start_ts}.parquet")
 
         spinner.stop()
+        scene_object_entropy_tracker.log_summary()
 
         if display_screen is not None:
             _pg.quit()
 
         # Destroy all remaining spawned vehicles
-        [v.destroy() for v in vehicles if v.is_spawned() and not v._destroyed]
+        try:
+            for v in active_vehicles:
+                v.destroy()
+        except UnboundLocalError:
+            pass
 
         if args.use_dataprov:
-            from dataprov import ProvenanceChain
-            from importlib.metadata import metadata, PackageNotFoundError
-            import hashlib
-
-            unique_hash = hashlib.sha256(
-                (str(vars(args)) + str(time.time_ns())).encode()
-            ).hexdigest()
-            tool_name = "rirun"
-            try:
-                meta = metadata(tool_name)
-                tool_version = meta["Version"]
-            except PackageNotFoundError:
-                tool_version = "unknown"
-            entity_id = tool_name + "_" + unique_hash[:8]
-
-            if args.dataprov_input_provenance_files:
-                input_provenance_files = args.dataprov_input_provenance_files
-            else:
-                input_provenance_files = None
-
-            mode_string = "real trajectories" if args.npc_trajectory_filepaths else ""
-            mode_string += (
-                " and autonomous agents"
-                if args.ego_agent and mode_string
-                else "autonomous agents"
-                if args.ego_agent
-                else ""
-            )
-
-            raw_inputs = []
-            raw_input_formats = []
-
-            if args.npc_trajectory_filepaths:
-                raw_inputs.extend(args.npc_trajectory_filepaths)
-                raw_input_formats.extend(["CSV"] * len(args.npc_trajectory_filepaths))
-
-            if args.map_filepath:
-                raw_inputs.append(args.map_filepath)
-                raw_input_formats.append("OpenDrive/Carla map")
-
-            if args.ego_route_filepath:
-                raw_inputs.append(args.ego_route_filepath)
-                raw_input_formats.append("XML")
-
-            inputs = raw_inputs
-            input_formats = raw_input_formats
-            chain = ProvenanceChain.create(
-                entity_id=entity_id,
-                initial_source=args.npc_trajectory_filepaths,
-                description=f"rirun simulation results created using {mode_string} on map {args.map_filepath}",
-                tags=[
-                    "RIRUN",
-                    "trajectory",
-                    "Synergies",
-                ],
-            )
-
-            chain.add(
-                started_at=run_start_time,
-                ended_at=timestamp_now_dataprov(),
-                tool_name=tool_name,
-                tool_version=tool_version,
-                arguments=" ".join(sys.argv[1:]),
-                operation="Execute simulation with provided parameters and/or trajectories and/or autonomous agents and produce resulting trajectories as file and/or video output.",
-                inputs=inputs,
-                input_formats=input_formats,
-                outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
-                    + [f"{args.output_dir}/camera_{_mode}_{start_ts}.mp4" for _mode in _record_modes],
-                output_formats=["Parquet"] + ["MP4"] * len(_record_modes),
-                input_provenance_files=input_provenance_files,
-                capture_environment=True,
-            )
-
-            chain.save(f"{args.output_dir}/{entity_id}_prov.json")
+            log_simulation_provenance(run_start_time, args, start_ts)
 
         if success:
             logging.info("Simulation completed successfully.")

@@ -1,0 +1,23 @@
+name: Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed-python-files
+        uses: tj-actions/changed-files@v47.0.6
+        with:
+          files: |
+            **/*.py
+      - uses: astral-sh/ruff-action@v3
+        if: steps.changed-python-files.outputs.any_changed == 'true'
+        with:
+          version: "0.13.2"  # pin to match pyproject.toml
+          src: ${{ steps.changed-python-files.outputs.all_changed_files }}

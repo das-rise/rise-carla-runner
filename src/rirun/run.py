@@ -364,7 +364,10 @@ def log_simulation_provenance(
         inputs=inputs,
         input_formats=input_formats,
         outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
-        + [f"{args.output_dir}/{_mode}_{start_ts}.mp4" for _mode in _record_modes],
+        + [
+            f"{args.output_dir}/camera_{_mode}_{start_ts}.mp4"
+            for _mode in _record_modes
+        ],
         output_formats=["Parquet"] + ["MP4"] * len(_record_modes),
         input_provenance_files=input_provenance_files,
         capture_environment=True,
@@ -598,7 +601,17 @@ def main() -> None:
         _positions = args.overhead_camera_position  # list of (x, y, z) or None
         _overhead_pos_idx = 0  # counts only overhead modes; dashcam does not consume a triplet
         for _mode in _record_modes:
-            _cam_ego = _pick_ego_vehicle(vehicles) if _mode in ("ego_overhead", "ego_dashcam") else None
+            _cam_ego = (
+                _pick_ego_vehicle(vehicles)
+                if _mode in ("ego_overhead", "ego_dashcam")
+                else None
+            )
+            # also assign the ego vehicle for the trajectory recorder
+            traj_recorder.update_ego_id(
+                _cam_ego.get_actor().id
+                if _cam_ego is not None and _cam_ego.name == "ego_agent"
+                else None
+            )
             # ego_dashcam uses a fixed vehicle-relative transform; overhead_camera_position does not apply.
             if _mode in ("ego_overhead", "stationary_overhead"):
                 if _positions:
@@ -666,6 +679,12 @@ def main() -> None:
                             if _new_ego is not None:
                                 _cam.reattach(_new_ego)
                                 _cam_entry[1] = _new_ego
+                                # also assign the ego vehicle for the trajectory recorder
+                                traj_recorder.update_ego_id(
+                                    _new_ego.get_actor().id
+                                    if _new_ego.name == "ego_agent"
+                                    else None
+                                )
 
             # check if any vehicle has fallen off the road
             if not args.no_z_check:

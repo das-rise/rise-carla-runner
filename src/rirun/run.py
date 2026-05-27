@@ -365,7 +365,7 @@ def log_simulation_provenance(
         input_formats=input_formats,
         outputs=[args.output_dir + f"/traj/traj_{start_ts}.parquet"]
         + [
-            f"{args.output_dir}/camera_{_mode}_{start_ts}.mp4"
+            f"{args.output_dir}/camera/camera_{_mode}_{start_ts}.mp4"
             for _mode in _record_modes
         ],
         output_formats=["Parquet"] + ["MP4"] * len(_record_modes),

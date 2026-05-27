@@ -287,6 +287,7 @@ class TeleportMovement(MovementPolicy):
             )
 
         self._advance_or_finish(actor, simulation_time, deviation_statistics)
+        
 
 
 class PCLA_Movement(MovementPolicy):

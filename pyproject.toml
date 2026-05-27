@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "rirun"
 version = "0.2.0"
 description = "A Carla runner for creating parametrizable scenarios from real-world automotive scenes"
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.8,<3.9"
 license = { text = "GPL-3.0 AND MIT AND APACHE-2.0" }
 
@@ -41,6 +41,7 @@ dependencies = [
   "rdp==0.8",
   "dataprov>=3.2",
   "xodr-plot @ file:helpers/xodr_plot",
+  "traj_convert @ git+https://github.com/das-rise/osi-gen",
 ]
 
 [project.optional-dependencies]

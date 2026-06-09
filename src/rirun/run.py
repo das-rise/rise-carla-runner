@@ -20,7 +20,7 @@ from rirun.kinetics.trajectory_utils import process_trajectory_file
 from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from rirun.utils.bling import rirun
-from rirun.utils.carla_tools import load_map
+from rirun.utils.carla_tools import OpenDriveSpeedProvider, load_map
 from rirun.utils.spinner import Spinner
 from rirun.utils.video_tools import StreamingCamera
 
@@ -503,6 +503,8 @@ def main() -> None:
     # Prepare ego agent vehicle (optional)
     if args.ego_agent:
         if args.ego_agent == "behavior_agent":
+            speed_provider = OpenDriveSpeedProvider(args.map_filepath, world.get_map())
+
             ego_behavior = args.ego_behavior or "cautious"
             logging.info(
                 f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"
@@ -512,6 +514,7 @@ def main() -> None:
                 behavior=ego_behavior,
                 xml_route=args.ego_route_filepath,
                 on_route_done=args.on_ego_behavior_agent_route_done,
+                speed_provider=speed_provider,
             )
             ego_vehicle = Vehicle(
                 world,

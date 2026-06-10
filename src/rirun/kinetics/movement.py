@@ -6,6 +6,7 @@ from typing import Optional
 
 import carla
 
+from rirun.carla_agents.navigation.basic_agent import BasicAgent
 from rirun.carla_agents.navigation.behavior_agent import BehaviorAgent
 from rirun.carla_agents.navigation.controller import VehiclePIDController
 from rirun.kinetics.actor import Actor
@@ -24,6 +25,11 @@ class MovementPolicy:
     #: Set to False in physics-enabled policies (e.g. BehaviorMovement) to skip
     #: the z-coordinate sanity check that detects teleport vehicles falling off the map.
     validate_z: bool = True
+    _do_emergency_brake: bool = False  # whether this movement policy checks for imminent collisions and applies emergency braking
+    _emergency_brake_applied: bool = False  # whether emergency braking has been applied (used to avoid repeated brake application and logging)
+    _basic_agent: Optional[BasicAgent] = (
+        None  # whether this movement policy uses a CARLA BasicAgent dummy for emergency braking
+    )
 
     def on_spawn(self, actor: Actor) -> None:
         """Called once the underlying CARLA actor is spawned."""
@@ -105,7 +111,12 @@ class MovementPolicy:
         if self._traversed_trajectory:
             return
 
+        if self._emergency_brake_applied:
+            self._apply_emergency_brake(actor)
+            return
+
         self._move(actor, simulation_time, deviation_statistics)
+        self._check_do_emergency_brake(actor)
 
     def _move(
         self,
@@ -114,6 +125,40 @@ class MovementPolicy:
         deviation_statistics: Optional[Statistic],
     ) -> None:
         raise NotImplementedError
+
+    def _check_do_emergency_brake(self, actor):
+        """
+        Check whether there is a vehicle in front of the actor with an imminent collision and apply emergency braking if so
+
+        Args:
+            actor (Actor): The actor this MovementPolicyt applies to check for imminent collisions and apply emergency braking to if necessary.
+        """
+
+        if not actor.get_actor().is_alive:
+            return
+
+        CONE_ANGLE = 45.0  # degrees
+        max_distance = (
+            actor.get_actor().get_velocity().length() / 3 + 2.0
+        )  # dynamic braking distance based on current speed, with a minimum of 2 meters
+
+        if self._basic_agent is not None and self._do_emergency_brake:
+            is_obstacle_present, obstacle_vehicle, obstacle_distance = (
+                self._basic_agent._vehicle_obstacle_detected(
+                    max_distance=max_distance, up_angle_th=CONE_ANGLE
+                )
+            )
+            if is_obstacle_present:
+                logging.warning(
+                    f"{actor.name}: Emergency braking applied due to detected obstacle {obstacle_vehicle.type_id} at distance {obstacle_distance:.1f}m"
+                )
+                self._apply_emergency_brake(actor)
+                self._emergency_brake_applied = True
+
+    def _apply_emergency_brake(self, actor):
+        actor.get_actor().apply_control(
+            carla.VehicleControl(steer=0.0, throttle=0.0, brake=1.0, hand_brake=True)
+        )
 
 
 class PIDMovement(MovementPolicy):
@@ -130,6 +175,7 @@ class PIDMovement(MovementPolicy):
         max_steering: float = 0.8,
         dt: float = 1.0 / 20.0,
         temporal_trigger: float = 0.01,
+        do_emergency_brake: bool = False,
     ) -> None:
         # Setup PID controller parameters, use defaults if not provided
         lateral_default = {"K_P": 1.95, "K_I": 0.05, "K_D": 0.2, "dt": dt}
@@ -144,6 +190,8 @@ class PIDMovement(MovementPolicy):
         self._traversed_trajectory = False
         self._temporal_trigger = temporal_trigger
 
+        self._do_emergency_brake = do_emergency_brake
+
     def on_spawn(self, vehicle: Actor) -> None:
         self._controller = VehiclePIDController(
             vehicle.get_actor(),
@@ -154,6 +202,8 @@ class PIDMovement(MovementPolicy):
             max_brake=self.max_brake,
             max_steering=self.max_steering,
         )
+        if self._do_emergency_brake:
+            self._basic_agent = BasicAgent(vehicle.get_actor())
 
     def _on_spawned(self, actor: Actor, curr_point: CarlaTrajectoryPoint) -> None:
         # bring actor up to starting speed
@@ -237,8 +287,12 @@ class TeleportMovement(MovementPolicy):
 
     def on_spawn(self, actor: Actor) -> None:
         actor.get_actor().set_simulate_physics(True)
+        if self._do_emergency_brake:
+            self._basic_agent = BasicAgent(actor.get_actor())
 
-    def __init__(self, temporal_trigger: float = 0.01):
+    def __init__(
+        self, temporal_trigger: float = 0.01, do_emergency_brake: bool = False
+    ):
         """
         Initialize the TeleportMovement policy.
 
@@ -250,6 +304,7 @@ class TeleportMovement(MovementPolicy):
 
         self._traversed_trajectory = False
         self._temporal_trigger = temporal_trigger
+        self._do_emergency_brake = do_emergency_brake
 
     def _move(
         self,

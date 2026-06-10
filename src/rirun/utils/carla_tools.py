@@ -182,6 +182,8 @@ class OpenDriveSpeedProvider:
         Returns:
             float: The speed limit at the given location in m/s, or None if no speed limit is found.
         """
+        DEFAULT_SPEED_LIMIT_MS = 30 / 3.6
+
         waypoint = self._map.get_waypoint(location, project_to_road=True)
 
         road_id = waypoint.road_id
@@ -201,4 +203,4 @@ class OpenDriveSpeedProvider:
                                         self._previous_speed_limit = speed_limit_ms
                                         return speed_limit_ms
 
-        return self._previous_speed_limit or 0
+        return self._previous_speed_limit or DEFAULT_SPEED_LIMIT_MS

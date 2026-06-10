@@ -183,6 +183,11 @@ def parse_arguments():
         "Use when trajectories were extracted with a subtracted origin (e.g. savant2rirun --offset X Y).",
     )
     parser.add_argument(
+        "--npc_activate_emergency_brake",
+        action="store_true",
+        help="Whether to enable emergency braking for NPC vehicles. If enabled, vehicles will apply an emergency brake if an obstacle is detected in front of them. Default: False.",
+    )
+    parser.add_argument(
         "--trajectory_statistics",
         type=str,
         choices=["average_distance_true"],
@@ -487,6 +492,7 @@ def main() -> None:
             vehicle_name,
             movement=movement,
             deviation_statistics=args.trajectory_statistics,
+            do_emergency_brake=True if args.npc_activate_emergency_brake else False,
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (

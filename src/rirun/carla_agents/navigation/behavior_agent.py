@@ -82,9 +82,6 @@ class BehaviorAgent(BasicAgent):
             self._speed_limit = self._speed_provider.get_speed_limit(
                 self._vehicle.get_location()
             )
-            print(
-                f"OpenDrive-extracted speed limit at current location: {self._speed_limit} m/s"
-            )
         else:
             self._speed_limit = self._vehicle.get_speed_limit()
         self._local_planner.set_speed(self._speed_limit)

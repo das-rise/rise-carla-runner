@@ -651,6 +651,9 @@ def main() -> None:
         )
         if has_attached_display:
             try:
+                os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = (
+                    "hide"  # suppress pygame welcome message
+                )
                 import pygame as _pg
 
                 _pg.init()

@@ -102,7 +102,8 @@ class MovementPolicy:
                     f"traj time {curr_point.time}, temporal trigger {self._temporal_trigger}"
                 )
                 actor.spawn()
-                self._on_spawned(actor, curr_point)
+                if actor.is_spawned():
+                    self._on_spawned(actor, curr_point)
                 self._pass_point_to_stats(
                     actor.get_current_trajectory_point(), deviation_statistics
                 )

@@ -18,6 +18,32 @@ should_use_local_carla() {
     [[ -n "${CARLA_ROOT:-}" ]]
 }
 
+is_port_2000_in_use() {
+    ss -ltn "sport = :2000" | grep -q ":2000"
+}
+
+stop_untracked_local_carla_processes() {
+    local pids
+    pids="$(pgrep -f 'CarlaUE4-Linux-Shipping|CarlaUE5-Linux-Shipping|CarlaUE4.sh|CarlaUE5.sh' | sort -u || true)"
+    if [[ -z "$pids" ]]; then
+        return 0
+    fi
+
+    local killed_any=false
+    while IFS= read -r pid; do
+        [[ -z "$pid" ]] && continue
+        local args
+        args="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+        if [[ -n "$args" ]] && [[ "$args" == *"$CARLA_ROOT"* ]]; then
+            echo "Stopping untracked local CARLA process (PID $pid)."
+            kill -KILL "$pid" 2>/dev/null || true
+            killed_any=true
+        fi
+    done <<< "$pids"
+
+    return 0
+}
+
 get_local_carla_launcher() {
     if [[ -x "$CARLA_ROOT/CarlaUE4.sh" ]]; then
         echo "$CARLA_ROOT/CarlaUE4.sh"
@@ -47,6 +73,8 @@ start_local_carla() {
         rm -f "$LOCAL_CARLA_PIDFILE"
     fi
 
+    stop_untracked_local_carla_processes
+
     echo "Starting local CARLA from $launcher"
     nohup "$launcher" -RenderOffScreen >"$LOCAL_CARLA_LOGFILE" 2>&1 &
     local pid=$!
@@ -58,13 +86,16 @@ start_local_carla() {
     fi
 
     echo "Failed to start local CARLA. Check log: $LOCAL_CARLA_LOGFILE" >&2
+    if is_port_2000_in_use; then
+        echo "Port 2000 owner: $(port_2000_owner_line)" >&2
+    fi
     rm -f "$LOCAL_CARLA_PIDFILE"
     return 1
 }
 
 stop_local_carla() {
     if [[ ! -f "$LOCAL_CARLA_PIDFILE" ]]; then
-        echo "No local CARLA PID file found at $LOCAL_CARLA_PIDFILE."
+        stop_untracked_local_carla_processes
         return 0
     fi
 
@@ -82,16 +113,10 @@ stop_local_carla() {
     fi
 
     echo "Stopping local CARLA (PID $pid)."
-    kill "$pid" 2>/dev/null || true
-    for _ in 1 2 3 4 5; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            rm -f "$LOCAL_CARLA_PIDFILE"
-            return 0
-        fi
-        sleep 1
-    done
-    kill -9 "$pid" 2>/dev/null || true
+    kill -KILL "$pid" 2>/dev/null || true
     rm -f "$LOCAL_CARLA_PIDFILE"
+    stop_untracked_local_carla_processes
+    return 0
 }
 
 carla_docker_start() {
@@ -116,5 +141,6 @@ carla_docker_stop() {
 
 carla_docker_restart() {
     carla_docker_stop
+    stop_untracked_local_carla_processes
     carla_docker_start
 }

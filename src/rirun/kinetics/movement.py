@@ -1,16 +1,18 @@
-from rirun.kinetics.stats import Statistic, Average_Distance_True
-from rirun.kinetics.actor import Actor
-from rirun.PCLA.PCLA_agents import PCLA_Agent
+import logging
 import math
 import random as _random_module
 import xml.etree.ElementTree as ET
 from typing import Optional
-import logging
+
 import carla
-from rirun.carla_agents.navigation.controller import VehiclePIDController
+
 from rirun.carla_agents.navigation.behavior_agent import BehaviorAgent
-from rirun.PCLA.PCLA import PCLA
+from rirun.carla_agents.navigation.controller import VehiclePIDController
+from rirun.kinetics.actor import Actor
+from rirun.kinetics.stats import Average_Distance_True, Statistic
 from rirun.kinetics.trajectory import CarlaTrajectoryPoint
+from rirun.PCLA.PCLA import PCLA
+from rirun.PCLA.PCLA_agents import PCLA_Agent
 
 ###
 
@@ -26,9 +28,7 @@ class MovementPolicy:
         """Called once the underlying CARLA actor is spawned."""
         return
 
-    def _validate_statistics(
-        self, deviation_statistics: Optional[Statistic]
-    ) -> None:
+    def _validate_statistics(self, deviation_statistics: Optional[Statistic]) -> None:
         if deviation_statistics is not None and not isinstance(
             deviation_statistics, Average_Distance_True
         ):
@@ -69,9 +69,7 @@ class MovementPolicy:
             self._traversed_trajectory = True
             return None
 
-    def _on_spawned(
-        self, actor: Actor, curr_point: CarlaTrajectoryPoint
-    ) -> None:
+    def _on_spawned(self, actor: Actor, curr_point: CarlaTrajectoryPoint) -> None:
         """Hook called immediately after the actor is spawned during step().
 
         Override to perform post-spawn actions such as applying an initial
@@ -132,7 +130,6 @@ class PIDMovement(MovementPolicy):
         dt: float = 1.0 / 20.0,
         temporal_trigger: float = 0.01,
     ) -> None:
-
         # Setup PID controller parameters, use defaults if not provided
         lateral_default = {"K_P": 1.95, "K_I": 0.05, "K_D": 0.2, "dt": dt}
         longitudinal_default = {"K_P": 1.0, "K_I": 0.05, "K_D": 0, "dt": dt}
@@ -173,8 +170,8 @@ class PIDMovement(MovementPolicy):
         curr_point = actor.get_current_trajectory_point()
 
         while True:
-            dist_to_waypoint = actor.get_actor().get_location().distance(
-                curr_point.transform.location
+            dist_to_waypoint = (
+                actor.get_actor().get_location().distance(curr_point.transform.location)
             )
             if dist_to_waypoint < self.MIN_DIST_TO_WAYPOINT:
                 curr_point = self._advance_or_finish(
@@ -287,7 +284,6 @@ class TeleportMovement(MovementPolicy):
             )
 
         self._advance_or_finish(actor, simulation_time, deviation_statistics)
-        
 
 
 class PCLA_Movement(MovementPolicy):
@@ -444,11 +440,35 @@ class BehaviorMovement(MovementPolicy):
                 z=float(last.get("z", 0.0)),
             )
         else:
-            spawn_points = world.get_map().get_spawn_points()
-            dest = self._rng.choice(spawn_points).location
+            current_transform = actor.get_actor().get_transform()
+            current_waypoint = world.get_map().get_waypoint(
+                current_transform.location,
+                project_to_road=True,
+                lane_type=carla.LaneType.Driving,
+            )
+            if current_waypoint is None:
+                spawn_points = world.get_map().get_spawn_points()
+                dest = self._rng.choice(spawn_points).location
+            else:
+                forward_candidates = current_waypoint.next(35.0)
+                if not forward_candidates:
+                    spawn_points = world.get_map().get_spawn_points()
+                    dest = self._rng.choice(spawn_points).location
+                else:
+                    current_yaw = current_transform.rotation.yaw
 
+                    def yaw_delta(candidate_wp: carla.Waypoint) -> float:
+                        diff = (candidate_wp.transform.rotation.yaw - current_yaw) % 360
+                        if diff > 180:
+                            diff -= 360
+                        return abs(diff)
+
+                    chosen_waypoint = min(forward_candidates, key=yaw_delta)
+                    dest = chosen_waypoint.transform.location
+
+        start_location = actor.get_actor().get_location()
         self._destination = dest
-        self._agent.set_destination(dest)
+        self._agent.set_destination(dest, start_location=start_location)
         self._agent_initialized = True
         logging.info(
             f"{actor.name}: BehaviorMovement destination set to ({dest.x:.1f}, {dest.y:.1f})"
@@ -458,7 +478,9 @@ class BehaviorMovement(MovementPolicy):
         if self._destination is None:
             return None
         location = actor.get_actor().get_location()
-        return math.hypot(location.x - self._destination.x, location.y - self._destination.y)
+        return math.hypot(
+            location.x - self._destination.x, location.y - self._destination.y
+        )
 
     def _apply_stop(self, actor: Actor) -> None:
         actor.get_actor().apply_control(
@@ -494,15 +516,18 @@ class BehaviorMovement(MovementPolicy):
         return True
 
     def _handle_route_done(self, actor: Actor) -> None:
-        logging.info(f"{actor.name}: BehaviorMovement route completed ({self._on_route_done}).")
+        logging.info(
+            f"{actor.name}: BehaviorMovement route completed ({self._on_route_done})."
+        )
         if self._on_route_done == "destroy":
             actor.destroy()
         elif self._on_route_done == "roam":
             world = actor.get_actor().get_world()
             spawn_points = world.get_map().get_spawn_points()
             dest = self._rng.choice(spawn_points).location
+            start_location = actor.get_actor().get_location()
             self._destination = dest
-            self._agent.set_destination(dest)
+            self._agent.set_destination(dest, start_location=start_location)
             logging.info(
                 f"{actor.name}: BehaviorMovement new roam destination ({dest.x:.1f}, {dest.y:.1f})"
             )

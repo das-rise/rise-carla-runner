@@ -7,5 +7,5 @@ output/*
 pretrained/
 .env
 scenes/dresden-listdb/
-scenes/roundabout-saro/
 scenes/ekas-landvag/
+.carla_local.*

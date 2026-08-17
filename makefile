@@ -36,8 +36,9 @@ env.create:
 	
 env.cuda:
 	$(CONDA) install -y -n $(ENV_NAME) \
+		--strict-channel-priority \
 		pytorch torchvision torchaudio pytorch-cuda=$(CUDA_VERSION) \
-		-c pytorch -c nvidia
+		-c pytorch -c nvidia -c defaults
 	@echo "→ Installed CUDA-enabled PyTorch"
 
 # ---------------------------

@@ -10,6 +10,8 @@ from typing import List, Optional, Tuple
 import carla
 import cv2
 import numpy as np
+
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"  # suppress pygame welcome message
 import pygame
 
 from rirun.kinetics.vehicle_tools import Actor

@@ -1,16 +1,18 @@
+import logging
+from typing import NamedTuple, Optional, Union
+
 import carla
+
+from rirun.kinetics.actor import Actor
 from rirun.kinetics.movement import (
     MovementPolicy,
     PIDMovement,
     PIDMovementTimestampAdvanced,
     TeleportMovement,
 )
-from rirun.kinetics.trajectory import Trajectory
-import logging
-from typing import NamedTuple, Union, Optional
 from rirun.kinetics.stats import Average_Distance_True
+from rirun.kinetics.trajectory import Trajectory
 from rirun.kinetics.trajectory_utils import get_first_xml_waypoint
-from rirun.kinetics.actor import Actor
 
 
 class Vehicle(Actor):
@@ -27,6 +29,7 @@ class Vehicle(Actor):
         blueprint: str = "model3",
         deviation_statistics: Optional[str] = None,
         role_name: str = "npc",
+        do_emergency_brake: bool = False,
     ) -> None:
         """
         Initialize an actor with a specified trajectory, movement policy, and vehicle blueprint.
@@ -52,6 +55,10 @@ class Vehicle(Actor):
                 Which trajectory deviation statistics to compute during the run. Can be:
                 - `"average_distance_true"`: computes the average distance between the reference and true position for all timestamps in a trajectory.
                 Defaults to `None`.
+            role_name (str, optional):
+                The role name to assign to the vehicle. Defaults to `"npc"`.
+            do_emergency_brake (bool, optional):
+                Whether to enable emergency braking for this vehicle when using a physics-based movement policy. Defaults to `False`.
         """
 
         self.name = name
@@ -78,11 +85,13 @@ class Vehicle(Actor):
             self._mover = movement
         elif isinstance(movement, str):
             if movement.lower() == "pid":
-                self._mover = PIDMovement()
+                self._mover = PIDMovement(do_emergency_brake=do_emergency_brake)
             elif movement.lower() == "pid_ts":
-                self._mover = PIDMovementTimestampAdvanced()
+                self._mover = PIDMovementTimestampAdvanced(
+                    do_emergency_brake=do_emergency_brake
+                )
             elif movement.lower() == "teleport":
-                self._mover = TeleportMovement()
+                self._mover = TeleportMovement(do_emergency_brake=do_emergency_brake)
             else:
                 raise ValueError(
                     f"Invalid movement policy string: {movement}. Must be 'pid', 'pid_ts', or 'teleport'."
@@ -128,7 +137,8 @@ class Vehicle(Actor):
         # return without spawning so the movement policy retries on the next tick.
         _safe_radius = 8.0
         nearby = [
-            a for a in self._world.get_actors().filter("*vehicle*")
+            a
+            for a in self._world.get_actors().filter("*vehicle*")
             if a.get_location().distance(transform.location) < _safe_radius
         ]
         if nearby:
@@ -140,7 +150,11 @@ class Vehicle(Actor):
 
         for z_delta in [0.0, 0.5, 1.0, 2.0, 4.0]:
             attempt = carla.Transform(
-                carla.Location(transform.location.x, transform.location.y, transform.location.z + z_delta),
+                carla.Location(
+                    transform.location.x,
+                    transform.location.y,
+                    transform.location.z + z_delta,
+                ),
                 transform.rotation,
             )
             actor = self._world.try_spawn_actor(self._blueprint, attempt)
@@ -226,7 +240,7 @@ class Vehicle(Actor):
 
         if self._destroyed:
             return True  # If the vehicle is destroyed, we consider the z-coordinate to be valid by default.
-        if not getattr(self._mover, 'validate_z', True):
+        if not getattr(self._mover, "validate_z", True):
             return True  # Physics-enabled movement manages z itself; skip the check.
         if self._spawned:
             current_position = self.get_actor().get_transform().location
@@ -259,8 +273,9 @@ def spawn_behavior_npcs(
     Returns:
         List of Vehicle instances (already stepped once to trigger spawning).
     """
-    from rirun.kinetics.movement import BehaviorMovement
     import random
+
+    from rirun.kinetics.movement import BehaviorMovement
 
     spawn_points = world.get_map().get_spawn_points()
     random.shuffle(spawn_points)
@@ -282,7 +297,9 @@ def spawn_behavior_npcs(
     blueprint_library = world.get_blueprint_library()
     car_bps = blueprint_library.filter("vehicle.*")
     # exclude bikes / motorcycles for stability
-    car_bps = [bp for bp in car_bps if int(bp.get_attribute("number_of_wheels").as_int()) == 4]
+    car_bps = [
+        bp for bp in car_bps if int(bp.get_attribute("number_of_wheels").as_int()) == 4
+    ]
 
     for i, sp in enumerate(chosen):
         bp = random.choice(car_bps)
@@ -291,6 +308,7 @@ def spawn_behavior_npcs(
         mover = BehaviorMovement(client, behavior=npc_behavior)
         # We need a dummy Trajectory-like first_trajectory_point; use spawn point
         from rirun.kinetics.trajectory import CarlaTrajectoryPoint
+
         dummy_traj_point = CarlaTrajectoryPoint(transform=sp, time=0.0, speed=0.0)
 
         v = Vehicle.__new__(Vehicle)

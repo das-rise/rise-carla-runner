@@ -20,7 +20,7 @@ from rirun.kinetics.trajectory_utils import process_trajectory_file
 from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from rirun.utils.bling import rirun
-from rirun.utils.carla_tools import load_map
+from rirun.utils.carla_tools import OpenDriveSpeedProvider, load_map
 from rirun.utils.spinner import Spinner
 from rirun.utils.video_tools import StreamingCamera
 
@@ -181,6 +181,11 @@ def parse_arguments():
         default=None,
         help="Add (x, y) offset to all trajectory coordinates before Carla conversion. "
         "Use when trajectories were extracted with a subtracted origin (e.g. savant2rirun --offset X Y).",
+    )
+    parser.add_argument(
+        "--npc_activate_emergency_brake",
+        action="store_true",
+        help="Whether to enable emergency braking for NPC vehicles. If enabled, vehicles will apply an emergency brake if an obstacle is detected in front of them. Default: False.",
     )
     parser.add_argument(
         "--trajectory_statistics",
@@ -487,6 +492,7 @@ def main() -> None:
             vehicle_name,
             movement=movement,
             deviation_statistics=args.trajectory_statistics,
+            do_emergency_brake=True if args.npc_activate_emergency_brake else False,
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (
@@ -502,41 +508,46 @@ def main() -> None:
 
     # Prepare ego agent vehicle (optional)
     if args.ego_agent:
-        if args.ego_agent == "behavior_agent":
-            ego_behavior = args.ego_behavior or "cautious"
-            logging.info(
-                f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"
-            )
-            behavior_movement = BehaviorMovement(
-                client,
-                behavior=ego_behavior,
-                xml_route=args.ego_route_filepath,
-                on_route_done=args.on_ego_behavior_agent_route_done,
-            )
-            ego_vehicle = Vehicle(
-                world,
-                args.ego_route_filepath,
-                "ego_agent",
-                behavior_movement,
-                blueprint="vehicle.audi.etron",
-                role_name="hero",
-            )
-        else:
-            logging.info(
-                f"Adding PCLA agent: {args.ego_agent} with route: {args.ego_route_filepath}"
-            )
-            pcla_agent_enum = PCLA_Agent(args.ego_agent)
-            pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.ego_spawn_time)
-            pcla_movement.set_throttle_exponent(1)
-            ego_vehicle = Vehicle(
-                world,
-                args.ego_route_filepath,
-                "ego_agent",
-                pcla_movement,
-                blueprint="vehicle.audi.etron",
-                role_name="hero",
-            )
-        vehicles.append(ego_vehicle)
+        speed_provider = (
+            OpenDriveSpeedProvider(args.map_filepath, world.get_map())
+            if args.map_filepath.endswith(".xodr")
+            else None
+        )
+        ego_behavior = args.ego_behavior or "cautious"
+        logging.info(
+            f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"
+        )
+        behavior_movement = BehaviorMovement(
+            client,
+            behavior=ego_behavior,
+            xml_route=args.ego_route_filepath,
+            on_route_done=args.on_ego_behavior_agent_route_done,
+            speed_provider=speed_provider,
+        )
+        ego_vehicle = Vehicle(
+            world,
+            args.ego_route_filepath,
+            "ego_agent",
+            behavior_movement,
+            blueprint="vehicle.audi.etron",
+            role_name="hero",
+        )
+    else:
+        logging.info(
+            f"Adding PCLA agent: {args.ego_agent} with route: {args.ego_route_filepath}"
+        )
+        pcla_agent_enum = PCLA_Agent(args.ego_agent)
+        pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.ego_spawn_time)
+        pcla_movement.set_throttle_exponent(1)
+        ego_vehicle = Vehicle(
+            world,
+            args.ego_route_filepath,
+            "ego_agent",
+            pcla_movement,
+            blueprint="vehicle.audi.etron",
+            role_name="hero",
+        )
+    vehicles.append(ego_vehicle)
 
     # Prepare BehaviorAgent roaming NPCs (optional)
     if args.num_random_behavior_npcs > 0:
@@ -648,6 +659,9 @@ def main() -> None:
         )
         if has_attached_display:
             try:
+                os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = (
+                    "hide"  # suppress pygame welcome message
+                )
                 import pygame as _pg
 
                 _pg.init()

@@ -175,12 +175,14 @@ class OpenDriveSpeedProvider:
         self._xml_tree = ET.parse(xodr_filepath).getroot()
 
     def get_speed_limit(self, location: carla.Location) -> float:
-        """Get the speed limit (m/s) at a given location by finding the corresponding position in the OpenDRIVE file.
+        """Get the speed limit (km/h) at a given location by finding the corresponding
+        position in the OpenDRIVE file.
+
         Args:
             location (carla.Location): The location for which to get the speed limit.
 
         Returns:
-            float: The speed limit at the given location in m/s, or None if no speed limit is found.
+            float: The speed limit at the given location in km/h.
         """
         DEFAULT_SPEED_LIMIT_MS = 30 / 3.6
 

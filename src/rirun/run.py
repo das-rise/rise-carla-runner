@@ -508,9 +508,11 @@ def main() -> None:
 
     # Prepare ego agent vehicle (optional)
     if args.ego_agent:
-        if args.ego_agent == "behavior_agent":
-            speed_provider = OpenDriveSpeedProvider(args.map_filepath, world.get_map())
-
+            speed_provider = (
+                OpenDriveSpeedProvider(args.map_filepath, world.get_map())
+                if args.map_filepath.endswith(".xodr")
+                else None
+            )
             ego_behavior = args.ego_behavior or "cautious"
             logging.info(
                 f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"

@@ -130,10 +130,8 @@ class MovementPolicy:
     def _check_do_emergency_brake(self, actor):
         """
         Check whether there is a vehicle in front of the actor with an imminent collision and apply emergency braking if so
-
         Args:
-            actor (Actor): The actor this MovementPolicyt applies to check for imminent collisions and apply emergency braking to if necessary.
-        """
+            actor (Actor): The actor this MovementPolicy applies to check for imminent collisions and apply emergency braking to if necessary.
 
         if not actor.get_actor().is_alive:
             return

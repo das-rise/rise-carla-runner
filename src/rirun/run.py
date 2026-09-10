@@ -508,46 +508,46 @@ def main() -> None:
 
     # Prepare ego agent vehicle (optional)
     if args.ego_agent:
-            speed_provider = (
-                OpenDriveSpeedProvider(args.map_filepath, world.get_map())
-                if args.map_filepath.endswith(".xodr")
-                else None
-            )
-            ego_behavior = args.ego_behavior or "cautious"
-            logging.info(
-                f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"
-            )
-            behavior_movement = BehaviorMovement(
-                client,
-                behavior=ego_behavior,
-                xml_route=args.ego_route_filepath,
-                on_route_done=args.on_ego_behavior_agent_route_done,
-                speed_provider=speed_provider,
-            )
-            ego_vehicle = Vehicle(
-                world,
-                args.ego_route_filepath,
-                "ego_agent",
-                behavior_movement,
-                blueprint="vehicle.audi.etron",
-                role_name="hero",
-            )
-        else:
-            logging.info(
-                f"Adding PCLA agent: {args.ego_agent} with route: {args.ego_route_filepath}"
-            )
-            pcla_agent_enum = PCLA_Agent(args.ego_agent)
-            pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.ego_spawn_time)
-            pcla_movement.set_throttle_exponent(1)
-            ego_vehicle = Vehicle(
-                world,
-                args.ego_route_filepath,
-                "ego_agent",
-                pcla_movement,
-                blueprint="vehicle.audi.etron",
-                role_name="hero",
-            )
-        vehicles.append(ego_vehicle)
+        speed_provider = (
+            OpenDriveSpeedProvider(args.map_filepath, world.get_map())
+            if args.map_filepath.endswith(".xodr")
+            else None
+        )
+        ego_behavior = args.ego_behavior or "cautious"
+        logging.info(
+            f"Adding BehaviorAgent ego: behavior={ego_behavior}, route={args.ego_route_filepath}"
+        )
+        behavior_movement = BehaviorMovement(
+            client,
+            behavior=ego_behavior,
+            xml_route=args.ego_route_filepath,
+            on_route_done=args.on_ego_behavior_agent_route_done,
+            speed_provider=speed_provider,
+        )
+        ego_vehicle = Vehicle(
+            world,
+            args.ego_route_filepath,
+            "ego_agent",
+            behavior_movement,
+            blueprint="vehicle.audi.etron",
+            role_name="hero",
+        )
+    else:
+        logging.info(
+            f"Adding PCLA agent: {args.ego_agent} with route: {args.ego_route_filepath}"
+        )
+        pcla_agent_enum = PCLA_Agent(args.ego_agent)
+        pcla_movement = PCLA_Movement(pcla_agent_enum, client, args.ego_spawn_time)
+        pcla_movement.set_throttle_exponent(1)
+        ego_vehicle = Vehicle(
+            world,
+            args.ego_route_filepath,
+            "ego_agent",
+            pcla_movement,
+            blueprint="vehicle.audi.etron",
+            role_name="hero",
+        )
+    vehicles.append(ego_vehicle)
 
     # Prepare BehaviorAgent roaming NPCs (optional)
     if args.num_random_behavior_npcs > 0:

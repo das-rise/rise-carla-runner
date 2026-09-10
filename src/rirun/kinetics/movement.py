@@ -135,6 +135,7 @@ class MovementPolicy:
 
         if not actor.get_actor().is_alive:
             return
+        """
 
         CONE_ANGLE = 45.0  # degrees
         max_distance = (

@@ -161,7 +161,13 @@ Then, place waypoints by clicking on the map and then adjusting the waypoint ang
 
 ## PCLA addendum
 
-This repository contains an edited version of the `PCLA` [repository](https://github.com/MasoudJTehrani/PCLA).
+This repository vendors a full mirror of the `PCLA` [repository](https://github.com/MasoudJTehrani/PCLA) at commit `07d4d5d` (Aug 2026) under `src/rirun/PCLA/`, with a small set of RISE-specific patches on top (documented in [src/rirun/PCLA/README.md](src/rirun/PCLA/README.md#rise-addendum)).
+
+- **Installation:** `make install` / `make rebuild` installs all PCLA dependencies and then downloads the pretrained agent weights (Hugging Face) and the large runtime assets (BEV maps, speed limits, town pickles) into `src/rirun/PCLA/pcla_agents/`. Nothing large is tracked in git. To download only a subset of the agent weights, run e.g. `conda run -n rirun bash build-scripts/install-weights.sh minddrive tfv4`.
+- **Agents:** 60 agent/seed combinations are exposed as `--ego_agent` CLI values (e.g. `tfv4_l6_0`, `minddrive_05b`, `simlingo_rirun`). See [src/rirun/PCLA/README.md](src/rirun/PCLA/README.md) for the full list and per-agent notes.
+- **`simlingo_rirun`:** RISE-specific SimLingo agent that requires the `SIMLINGO_CUSTOM_PROMPT` and `SIMLINGO_USER_FLAG` environment variables.
+- **Timestep:** PCLA agents step on every simulation tick and require a fresh frame from every sensor (including the 100 Hz speedometer pseudo-sensor) on each tick. Run them with `--timestep 0.0333333333333333333` (30 Hz); a timestep of `0.01` stalls the speedometer and deadlocks the agent.
+- **Python 3.8 notes:** `flash-attn` is not available for Python 3.8, so the MindDrive/ORION configs fall back to standard attention (`flash_attn=False`). The `lav_*`, `tfv3_*` and `lmdrive_*` agents additionally require `torch-scatter`, which must be installed manually for your torch/CUDA build, e.g. `pip install torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cu121.html`.
 
 ## Acknowledgments
 

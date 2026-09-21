@@ -1,0 +1,291 @@
+{
+  "rig_id": "baa4c6b7f4",
+  "agents_using_this_rig": [
+    "tfv3_ltf"
+  ],
+  "n_frames_captured": 10,
+  "sensors": {
+    "rgb_front": {
+      "type": "sensor.camera.rgb",
+      "spec": {
+        "x": 1.3,
+        "y": 0.0,
+        "z": 2.3,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
+        "width": 960,
+        "height": 480,
+        "fov": 120,
+        "id": "rgb_front"
+      },
+      "format_note": "Raw array is HxWx4 uint8 in BGRA order (CARLA camera). Feed the bridge BGR (HxWx3) or BGRA (HxWx4); it appends alpha if you pass 3 channels.",
+      "array_shape": [
+        480,
+        960,
+        4
+      ],
+      "dtype": "uint8",
+      "example_images_note": "thumbnails (downscaled JPEG) for visual reference only; the true array is array_shape/dtype above (BGRA uint8, full resolution).",
+      "example_images": [
+        "rgb_front_f00.jpg",
+        "rgb_front_f05.jpg"
+      ]
+    },
+    "rgb_left": {
+      "type": "sensor.camera.rgb",
+      "spec": {
+        "x": 1.3,
+        "y": 0.0,
+        "z": 2.3,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": -60.0,
+        "width": 960,
+        "height": 480,
+        "fov": 120,
+        "id": "rgb_left"
+      },
+      "format_note": "Raw array is HxWx4 uint8 in BGRA order (CARLA camera). Feed the bridge BGR (HxWx3) or BGRA (HxWx4); it appends alpha if you pass 3 channels.",
+      "array_shape": [
+        480,
+        960,
+        4
+      ],
+      "dtype": "uint8",
+      "example_images_note": "thumbnails (downscaled JPEG) for visual reference only; the true array is array_shape/dtype above (BGRA uint8, full resolution).",
+      "example_images": [
+        "rgb_left_f00.jpg",
+        "rgb_left_f05.jpg"
+      ]
+    },
+    "rgb_right": {
+      "type": "sensor.camera.rgb",
+      "spec": {
+        "x": 1.3,
+        "y": 0.0,
+        "z": 2.3,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 60.0,
+        "width": 960,
+        "height": 480,
+        "fov": 120,
+        "id": "rgb_right"
+      },
+      "format_note": "Raw array is HxWx4 uint8 in BGRA order (CARLA camera). Feed the bridge BGR (HxWx3) or BGRA (HxWx4); it appends alpha if you pass 3 channels.",
+      "array_shape": [
+        480,
+        960,
+        4
+      ],
+      "dtype": "uint8",
+      "example_images_note": "thumbnails (downscaled JPEG) for visual reference only; the true array is array_shape/dtype above (BGRA uint8, full resolution).",
+      "example_images": [
+        "rgb_right_f00.jpg",
+        "rgb_right_f05.jpg"
+      ]
+    },
+    "imu": {
+      "type": "sensor.other.imu",
+      "spec": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
+        "sensor_tick": 0.05,
+        "id": "imu"
+      },
+      "format_note": "[accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, compass] float64; compass in radians.",
+      "array_shape": [
+        7
+      ],
+      "dtype": "float64",
+      "values_all_frames": [
+        [
+          4.65893,
+          -0.00088,
+          9.797548,
+          0.000596,
+          0.000806,
+          0.003501,
+          1.570752
+        ],
+        [
+          4.496095,
+          0.012483,
+          9.801106,
+          -0.001019,
+          0.00027,
+          0.000391,
+          1.570745
+        ],
+        [
+          4.337034,
+          0.007954,
+          9.801317,
+          -0.000367,
+          -0.000862,
+          -0.000655,
+          1.570752
+        ],
+        [
+          4.214769,
+          -0.000753,
+          9.750338,
+          -0.001253,
+          -0.000379,
+          -0.00135,
+          1.570756
+        ],
+        [
+          4.130629,
+          -0.003094,
+          9.781166,
+          -0.001539,
+          0.000835,
+          0.001843,
+          1.570761
+        ],
+        [
+          4.062231,
+          -0.003655,
+          9.818538,
+          -0.001234,
+          0.001838,
+          -0.001463,
+          1.570764
+        ],
+        [
+          4.013899,
+          0.006669,
+          9.860267,
+          -0.000163,
+          0.000789,
+          0.001052,
+          1.570766
+        ],
+        [
+          3.817755,
+          0.000976,
+          9.837864,
+          -0.000571,
+          0.004575,
+          -0.002158,
+          1.570774
+        ],
+        [
+          0.732808,
+          0.006297,
+          9.789943,
+          -0.002073,
+          0.006731,
+          -0.001051,
+          1.570776
+        ],
+        [
+          0.29947,
+          -0.00889,
+          9.759454,
+          -0.000137,
+          0.003395,
+          0.000875,
+          1.570779
+        ]
+      ]
+    },
+    "gps": {
+      "type": "sensor.other.gnss",
+      "spec": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
+        "sensor_tick": 0.01,
+        "id": "gps"
+      },
+      "format_note": "[latitude, longitude, altitude] float64 (WGS84 degrees / metres).",
+      "array_shape": [
+        3
+      ],
+      "dtype": "float64",
+      "values_all_frames": [
+        [
+          0.000983,
+          2.6e-05,
+          0.219893
+        ],
+        [
+          0.000984,
+          3e-05,
+          0.22007
+        ],
+        [
+          0.000988,
+          2.6e-05,
+          0.220231
+        ],
+        [
+          0.000982,
+          3.6e-05,
+          0.220319
+        ],
+        [
+          0.000989,
+          3.8e-05,
+          0.220377
+        ],
+        [
+          0.000983,
+          3.6e-05,
+          0.220458
+        ],
+        [
+          0.000974,
+          3.2e-05,
+          0.220697
+        ],
+        [
+          0.000975,
+          3.7e-05,
+          0.221009
+        ],
+        [
+          0.00099,
+          4.4e-05,
+          0.221268
+        ],
+        [
+          0.000977,
+          4.2e-05,
+          0.221409
+        ]
+      ]
+    },
+    "speed": {
+      "type": "sensor.speedometer",
+      "spec": {
+        "reading_frequency": 20,
+        "id": "speed"
+      },
+      "format_note": "forward speed in m/s; delivered as {'speed': float}.",
+      "dtype": "float",
+      "values_all_frames": [
+        3.8493,
+        4.0697,
+        4.2831,
+        4.4913,
+        4.6958,
+        4.8973,
+        5.0962,
+        5.2584,
+        5.2522,
+        5.2684
+      ]
+    }
+  }
+}

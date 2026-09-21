@@ -1,0 +1,103 @@
+Agent Test Results - 2026-08-04 21:35:38
+======================================================================
+
+Summary: 41 passed, 0 failed out of 41 agents
+
+Skipped agents: 0
+======================================================================
+
+INFERENCE TIME & FPS  (steady-state = mean of last 10 of 45 frames):
+----------------------------------------------------------------------
+agent                   infer_ms  infer_fps  loop_fps  peak_ms
+autoware_v1                  0.0    55271.5      67.8        9
+carl_roach_0                 3.7      270.8      87.4       46
+carl_carl_0                  3.9      258.6      84.9       33
+plant2_plant2_0             17.8       56.3      47.3      102
+carl_carlv11                23.3       42.8      31.5       52
+tfv4_aim_0                  43.4       23.1      20.2       90
+carl_plant_0                44.8       22.3      19.6       90
+lbc_nc                      45.6       21.9      19.9      101
+lbc_lb                      47.5       21.1      18.7      140
+wor_nc                      63.0       15.9      14.4      123
+wor_lb                      64.0       15.6      14.0      180
+neat_aimbev                 67.1       14.9      13.5       99
+neat_aim2dsem               68.9       14.5      13.1      110
+neat_aim2ddepth             69.7       14.3      13.1       94
+tfv4_l6_0                   89.7       11.1       9.4       97
+tfv4_lav_0                  90.9       11.0       9.4      162
+tfv4_wp_0                   93.1       10.7       9.1      103
+lav_fast                   113.8        8.8       7.5     5291
+lav_lav                    129.4        7.7       6.9      335
+tfv3_lf                    133.1        7.5       6.6      325
+if_if                      143.1        7.0       6.3      424
+tfv3_gf                    143.3        7.0       6.2      413
+tfv3_tf                    160.1        6.2       5.7      670
+tfv3_ltf                   163.3        6.1       5.9      522
+neat_neat                  173.1        5.8       5.6      371
+lmdrive_vicuna             198.2        5.0       4.7      351
+lmdrive_llava              198.4        5.0       4.6      401
+lmdrive_llama              200.5        5.0       4.6      329
+tfv5_alltowns              203.9        4.9       4.6      766
+tfv5_notown13              207.6        4.8       4.5      222
+tfv6_noradar               234.8        4.3       3.8      414
+tfv6_resnet                249.4        4.0       3.6      417
+tfv6_notown13              254.1        3.9       3.5      319
+tfv6_4cameras              274.8        3.6       3.3      468
+tfv6_visiononly            291.6        3.4       3.1      405
+tfv6_regnet                312.1        3.2       2.9      858
+tt_tt                      633.9        1.6       1.5     1078
+minddrive_05b             1164.3        0.9       0.9     1461
+orion_base                1172.2        0.9       0.9     1928
+minddrive_3b              1775.1        0.6       0.6     2076
+simlingo_simlingo         2133.8        0.5       0.5     3320
+
+======================================================================
+
+PASSED AGENTS:
+----------------------------------------------------------------------
+orion_base
+minddrive_05b
+minddrive_3b
+tt_tt
+autoware_v1
+plant2_plant2_0
+tfv5_alltowns
+tfv5_notown13
+tfv6_regnet
+tfv6_resnet
+tfv6_4cameras
+tfv6_noradar
+tfv6_visiononly
+tfv6_notown13
+carl_carl_0
+carl_carlv11
+carl_roach_0
+carl_plant_0
+tfv3_tf
+tfv3_ltf
+tfv3_lf
+tfv3_gf
+lav_lav
+lav_fast
+lbc_lb
+lbc_nc
+wor_lb
+wor_nc
+lmdrive_llava
+lmdrive_vicuna
+lmdrive_llama
+simlingo_simlingo
+tfv4_lav_0
+tfv4_aim_0
+tfv4_wp_0
+tfv4_l6_0
+neat_neat
+neat_aimbev
+neat_aim2dsem
+neat_aim2ddepth
+if_if
+
+======================================================================
+
+FAILED AGENTS:
+----------------------------------------------------------------------

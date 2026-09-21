@@ -58,7 +58,7 @@ install:
 		echo "→ Installed CARLA Python wheel: $$carla_wheel"; \
 	fi
 # install pre-trained weights
-	@bash build-scripts/install-weights.sh
+	@$(CONDA) run -n $(ENV_NAME) bash build-scripts/install-weights.sh
 	@echo "→ Installed project (core dependencies)"
 
 install-dev: install

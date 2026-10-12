@@ -1,261 +1,466 @@
-<p align="center" style="font-size:40px;">
-  <b>PCLA: A framework for testing autonomous agents in the CARLA simulator</b>
-  <br>
-  <br>
-  PCLA agents:
-  <br>
-  <br>
-  <b>--- SimLingo (CarLLava), Transfuser++, Interfuser, NEAT, World on Rails (WoR), Learning By Cheating (LBC), Learning from All Vehicles (LAV) ---</b>
+
+<div align="center">
+
+# PCLA: Pretrained CARLA Leaderboard Agents
+
+</div>
+
+<p align="center">
+<b>A framework for testing autonomous agents in the CARLA simulator</b> </br>
+<b>With PCLA bridge you can run the agents without the CARLA</b> </br>
+A versatile framework for deploying, testing, and evaluating pretrained autonomous driving agents (ADAs) from the CARLA Leaderboard on your own vehicle.
 </p>
+
+[![FSE 2025 Paper](https://img.shields.io/badge/Paper-FSE%202025-blue.svg)](https://dl.acm.org/doi/abs/10.1145/3696630.3728577)
+[![CARLA Leaderboard](https://img.shields.io/badge/CARLA-Leaderboard-success.svg)](https://leaderboard.carla.org)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blueviolet.svg)](https://www.python.org/)
+[![GitHub stars](https://img.shields.io/github/stars/MasoudJTehrani/PCLA?style=social)](https://github.com/MasoudJTehrani/PCLA)
+---
+
+## RISE addendum
+
+This directory is a vendored mirror of upstream PCLA at commit `07d4d5d` (Aug 2026), integrated into the RISE Carla Runner. In RISE the agents are driven through `src/rirun/run.py --ego_agent <name>` (not standalone `PCLA.py`); agent names are defined in `PCLA_agents.py`.
+
+RISE-specific deviations from upstream:
+
+- **Python 3.8 support:** PEP 604 union annotations in `pcla_agents/transfuserv6/lead/` were rewritten to `typing.Optional`/`typing.Union` (~158 sites, 35 files), and `flash_attn` is disabled in the MindDrive/ORION PCLA configs (`flash-attn` has no Python 3.8 wheel).
+- **`simlingo_rirun`:** additional SimLingo agent (`pcla_agents/simlingo/rirun_agent_simlingo.py` + `rirun_config_simlingo.py`, registered in `agents.json`) that requires the `SIMLINGO_CUSTOM_PROMPT` and `SIMLINGO_USER_FLAG` environment variables.
+- **`PCLA.py`:** adds a `route_completed` property and route setup logging, used by the RISE movement node. The speedometer pseudo-sensor is kept at 100 Hz (upstream uses 20 Hz): RISE steps the agent every tick and `get_data()` requires a fresh frame from every sensor, so the lower rate would starve it. Run PCLA agents with `--timestep 0.0333333333333333333` (see the root README).
+- **Numerical guard:** `_ensure_positive_definite` covariance guard applied around the UKF updates in `pcla_agents/transfuserv4/{map_agent,sensor_agent}.py`.
+- **Connection robustness:** `leaderboard_codes/sensor_interface.py` raises `MAX_CONNECTION_ATTEMPTS` to 100 and retries queue registration after (re)connection.
+- **CARLA 0.9.15:** RISE pins CARLA 0.9.15; `pcla_functions/gnss_guard.py` is an identity no-op on 0.9.15.
+- **Large binaries are not tracked in git:** pretrained weights are downloaded from the PCLA Hugging Face dataset via `pcla_functions/download_weights.py` and runtime assets (BEV maps, speed limits, town pickles) via `pcla_functions/download_assets.py`; both run automatically during `make install`.
+- **`torch-scatter`** (needed by the `lav_*`, `tfv3_*` and `lmdrive_*` agents) is not installed automatically; install it manually for your torch/CUDA build, e.g. `pip install torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cu121.html`.
+- The `autoware` agent family is vendored but not exposed as a RISE `--ego_agent` value (it requires the ROS 2/Docker bridge described in `pcla_agents/autoware/README.md`).
+
+## Supported Autonomous Agents
+
+PCLA currently supports **41** agents and 27 additional training seeds from 18 major autonomous driving projects:
+
+[**SimLingo**](https://github.com/RenzKa/simlingo) | [**LMDrive**](https://github.com/opendilab/LMDrive) | [**ThinkTwice**](https://github.com/OpenDriveLab/ThinkTwice) | [**MindDrive**](https://github.com/xiaomi-mlab/Minddrive) | [**ORION**](https://github.com/xiaomi-mlab/Orion) | [**TransfuserV3**](https://github.com/autonomousvision/transfuser) | [**TransfuserV4**](https://github.com/autonomousvision/carla_garage/tree/leaderboard_1) | [**TransfuserV5**](https://github.com/autonomousvision/carla_garage/tree/leaderboard_2) | [**TransfuserV6 / Lead**](https://github.com/autonomousvision/lead) | [**CaRL**](https://github.com/autonomousvision/CaRL/tree/main/CARLA) | [**Roach**](https://github.com/autonomousvision/CaRL/tree/main/CARLA) | [**PlanT2**](https://github.com/autonomousvision/plant2) | [**PlanT**](https://github.com/autonomousvision/CaRL/tree/main/PlanT) | [**Interfuser**](https://github.com/opendilab/InterFuser) | [**NEAT**](https://github.com/autonomousvision/neat) | [**WoR**](https://github.com/dotchen/WorldOnRails) | [**LBC**](https://github.com/dotchen/WorldOnRails) | [**LAV**](https://github.com/dotchen/LAV)
+
+## Additional Agents
+You can now use [**Autoware**](https://github.com/autowarefoundation/autoware) ⭐ bridge in PCLA
+> **Autoware** is not an end-to-end neural net but the open-source, HD-map-based modular AD stack, running as a ROS 2/Docker stack bridged to CARLA. It drives any town (localizing on a pointcloud map generated from the sim) and obeys traffic lights. See its dedicated [Autoware README](pcla_agents/autoware/README.md).
 
 ---
 
-<p align="center">
-PCLA (Pretrained CARLA Leaderboard Agents) is a versatile framework that allows you to use and evaluate the autonomous agents from the <a href="https://leaderboard.carla.org">CARLA Leaderboard</a> independently of its core codebase and put them on your vehicle. </br>
+### Why Use PCLA?
 
-* PCLA provides a clear method to deploy Autonomous Driving Agents (ADAs) onto a vehicle without relying on the Leaderboard codebase.
-* Enables easy switching between ADAs without requiring changes to CARLA versions or programming environments.
-* Allows you to have multiple vehicles with different autonomous agents (requires high graphical memory).
-* Provides the next movement action computed by the chosen agent, which can then be used in any desired application.
-* Is fully compatible with the latest version of CARLA and independent of the Leaderboard’s specific CARLA version.
-* Includes **16** different high-performing ADAs trained with 24 distinct training seeds. 
+PCLA (Pretrained CARLA Leaderboard Agents) is a versatile framework designed to decouple the autonomous driving agents (ADAs) from the restrictive CARLA Leaderboard codebase.
 
-Paper available at <a href="https://dl.acm.org/doi/abs/10.1145/3696630.3728577">Foundations of Software Engineering</a>
+* **Decoupled Deployment:** Deploy high-performing ADAs onto a vehicle without relying on the original Leaderboard core codebase.
+* **Easy Switching:** Effortlessly switch between **41 different agents** and their **27 additional training seeds** without requiring changes to CARLA versions or programming environments.
+* **Version Independent:** Fully compatible with the latest version of CARLA, independent of the Leaderboard’s specific CARLA version.
+* **Multi-Agent Support:** Run multiple vehicles with different autonomous agents simultaneously (note: requires high graphical memory).
+* **CARLA Action Access:** Retrieve the computed CARLA movement action from the chosen agent for use in any custom application.
 
-</p>
+The corresponding paper is available at [Foundations of Software Engineering (FSE)](https://dl.acm.org/doi/abs/10.1145/3696630.3728577).
 
-<p align="center">
-<strong>PCLA was tested on Linux Ubuntu 22 and CARLA 9.15.2 Unreal Engine 4.</strong> </br>
-A video tutorial on how to use PCLA is available below (update will come soon).
-  
-<div align="center">
-  <a href="https://www.youtube.com/watch?v=QyaMK6vclBg"><img src="https://img.youtube.com/vi/QyaMK6vclBg/0.jpg" alt="PCLA Video Tutorial"></a>
-</div>
+---
 
-<b style="font-size: 20px; color: #E44D26;">PCLA 2 will soon be released to support CARLA 9.16 and Python 3.12</b>
-</p>
+### Compatibility & Video
 
+PCLA was tested on **Linux Ubuntu 22** and **[CARLA 0.9.16](https://github.com/carla-simulator/carla/releases/tag/0.9.16/) (Unreal Engine 4)**.
 
-## Contents
+:warning: CARLA 0.9.15 is more compatible with the agents
 
-1. [Setup](#setup)
-2. [Pre-Trained Weights](#pre-trained-weights)
-3. [Autonomous Agents](#autonomous-agents)
-4. [How to Use](#how-to-use)
-5. [Navigation](#navigation)
-6. [Environment Variables](#environment-variables)
-7. [Sample Code](#sample-code)
-8. [FAQ](#FAQ)
-9. [Citation](#citation)
+A video tutorial on how to use PCLA is available below.
 
-## Setup
-Download and install the <a href="https://carla.readthedocs.io/en/latest/">CARLA simulator</a> from the official website. Based on your preference, you can either use quick installation or build from source.</br>
-Please make sure CUDA and PyTorch are installed.</br>
-<a href="https://www.gpu-mart.com/blog/install-nvidia-cuda-11-on-ubuntu">Tutorial for installing CUDA on ubuntu<a></br>
-<a href="https://pytorch.org/get-started/locally/">Tutorial for PyTorch<a>
+[![PCLA Video Tutorial](https://img.youtube.com/vi/_ghqJV4Ee40/0.jpg)](https://youtu.be/_ghqJV4Ee40)
 
-Clone the repository and build the conda environment:
+---
+## PCLA bridge
+The PCLA bridge bridge lets you drive a PCLA sensor agent from *any* source of sensor data and route it to any usecase without the need for the CARLA simulator. To use and learn more, visit [PCLA bridge](pcla_bridge)
 
-```Shell
-git clone https://github.com/MasoudJTehrani/PCLA
-cd PCLA
-conda env create -f environment.yml
-conda activate PCLA
-```
-Please make sure to install torch-scatter according to your own CUDA version. You can check your CUDA version using the `python cuda.py` code.
+---
 
-## Pre-Trained Weights
+## Table of Contents
 
-Download the pre-trained weights from <a href="https://zenodo.org/records/17110968">Zenodo</a> or directly from <a href="https://zenodo.org/records/17110968/files/pretrained.zip?download=1">here</a> and extract them into the `PCLA/agents/` directory.</br>
-Ensure that each folder of pre-trained weights is placed directly next to its respective model's folder. The `agents` folder should look like this.
+1.  [Setup](#1-setup)
+2.  [Pre-Trained Weights](#2-pre-trained-weights)
+3.  [Autonomous Agents](#3-autonomous-agents)
+4.  [How to Use](#4-how-to-use)
+5.  [Navigation](#5-navigation)
+6.  [Sample Code](#6-sample-code)
+7.  [FAQ](#7-faq)
+8.  [Citation](#8-citation)
+
+---
+
+## 1. Setup
+If you want to use PCLA outside and without the CARLA simulator, go to [PCLA bridge](pcla_bridge).
+### Prerequisites
+
+1.  Download and install the [CARLA simulator](https://carla.readthedocs.io/en/latest/) from the official website (quick installation or build from source).
+2.  Ensure **CUDA** and **PyTorch** are installed on your system.
+    * [Tutorial for installing CUDA on Ubuntu](https://www.gpu-mart.com/blog/install-nvidia-cuda-11-on-ubuntu)
+    * [Tutorial for PyTorch installation](https://pytorch.org/get-started/locally/)
+
+### Installation Steps
+
+1.  **Clone the repository, build the Conda environment, and setup big assets:**
+
+    ```bash
+    git clone https://github.com/MasoudJTehrani/PCLA
+    cd PCLA
+    conda env create -f environment.yml
+    conda activate PCLA
+    python pcla_functions/download_assets.py 
+    ```
+2.  **Install `torch-scatter` and CUDA Toolkit:**
+    > **Note:** Please make sure to install `torch-scatter` and `CUDA Toolkit` according to your specific CUDA version. You can check your CUDA version using the included `python cuda.py` script.
+
+3.  **Additional setup for LMDrive agent:**
+
+    ```bash
+    conda activate PCLA
+    
+    # 1. Vision Encoder
+    cd pcla_agents/lmdrive/vision_encoder
+    pip uninstall timm
+    python setup.py develop
+    
+    # 2. LAVIS
+    cd ../LAVIS
+    python setup.py develop
+    
+    # 3. Fix ftfy dependency
+    pip uninstall ftfy -y
+    pip install "ftfy==6.1.1"
+    cd ../../../
+    ```
+
+---
+
+## 2. Pre-Trained Weights
+
+You have two options to download the required pre-trained model weights:
+
+### Option 1: Automatic Download
+
+Run the following script to automatically download and unzip the weights into the correct location:
+
 ```bash
-├── agents
-   ├── transfuserpp
-   ├── transfuserppPretrained
-   ├── interfuser
-   ├── interfuserPretrained
-   ├── neat
-   ├── neatPretrained
-   ├── lav
-   ├── lavPretrained
-   ├── wor
-   ├── worPretrained
-   ├── simlingo
-   └── simlingoPretrained
+python pcla_functions/download_weights.py                    # download everything (bare invocation still works)
+python pcla_functions/download_weights.py --all              # explicit
+python pcla_functions/download_weights.py --agents minddrive orion tt # if you only want the weights from specific agents
+python pcla_functions/download_weights.py --list             # see valid names + what each pulls
+
+```
+### Option 2: Manual Download
+
+1.  Manually download each agent's weights file from [Hugging Face](https://huggingface.co/datasets/MasoudJTehrani/PCLA/tree/main).
+    
+2.  Put the folders into the `PCLA/pcla_agents/` directory.
+    
+
+### Directory Structure
+
+Ensure that the downloaded pre-trained weight folders are placed directly next to their respective model's folder. The final `pcla_agents` directory should look like this:
+
+```
+├── pcla_agents/
+│   ├── transfuserv4/
+│   ├── transfuserv4_pretrained/
+│   ├── interfuser/
+│   ├── interfuser_pretrained/
+│   ├── ...
 ```
 
-## Autonomous Agents
+## 3. Autonomous Agents
 
-PCLA includes 14 different autonomous agents and 21 distinct training seeds to choose from.
-- **SimLingo(CarLLava)**
-  - Contains 1 agent from the leaderboard 2, previously named CarLLava.
-    - **simlingo_simlingo** : The best performing agent, first place at <a href="https://leaderboard.carla.org">CARLA Leaderboard 2</a> SENSORS track.
-  - <a href="https://github.com/RenzKa/simlingo ">Repository</a>
-    
-- **Transfuser++**
-  - Contains 4 different autonomous agents of Transfuser++ with 3 training seeds for each agent. To use these agents, you need to set some [Environment Variables](#environment-variables).
-    - **tfpp_l6_#** : Best performing Transfuser++ agent. Second place at <a href="https://leaderboard.carla.org">CARLA Leaderboard 2</a> SENSORS track(Tuebingen_AI team)
-    - **tfpp_lav_#** : Transfuser++ but it's not trained on Town02 and Town05.
-    - **tfpp_wp_#** : Transfuser++ WP from their paper's appendix.
-    - **tfpp_aim_#** : Reproduction of the <a href="https://openaccess.thecvf.com/content/CVPR2021/html/Prakash_Multi-Modal_Fusion_Transformer_for_End-to-End_Autonomous_Driving_CVPR_2021_paper.html" target="_blank">AIM </a>method, explained in their paper's appendix.
+PCLA includes **41** different autonomous agents and **27** additional training seeds to choose from.</br>
+The **FPS** for each agent on our hardware is recorded in `documents` folder and [documents/agent_test_results.txt](https://github.com/MasoudJTehrani/PCLA/blob/main/documents/agent_test_results.txt).
+> **Find the repository of each agent at the top of this page.**
 
-  - Replace # with the seed number from 0 to 2.
-  - <a href="https://github.com/autonomousvision/carla_garage">Repository</a>
-    
-- **Learning from All Vehicles**
-  - Contains 2 autonomous agents. Needs the CARLA to be run with -vulkan.
-    - **lav_lav** : The original LAV agent.
-    - **lav_fast** : The leaderboard submission of LAV. The codes are slightly optimized for leaderboard inference speed with temporal LiDAR scans.
-  - <a href="https://github.com/dotchen/LAV">Repository</a>
-    
-- **Learning By Cheating**
-  - Contains 2 autonomous agents. Needs the CARLA to be run with -vulkan.
-    - **lbc_nc** : Learning By Cheating, the NoCrash model.
-    - **lbc_lb** : Learning By Cheating, the Leaderboard model.
-  - <a href="https://github.com/dotchen/WorldOnRails">Repository</a>
-    
-- **World on Rails**
-  - Contains 2 autonomous agents. Needs the CARLA to be run with -vulkan.
-    - **wor_nc** : World on Rails, the NoCrash model.
-    - **wor_lb** : World on Rails, the Leaderboard model.
-  - <a href="https://github.com/dotchen/WorldOnRails">Repository</a>
-    
-- **NEAT**
-  - Contains 4 different autonomous agents.
-      - **neat_neat**
-      - **neat_aimbev**
-      - **neat_aim2dsem**
-      - **neat_aim2ddepth**
-  - <a href="https://github.com/autonomousvision/neat">Repository</a>
-    
-- **Interfuser**
-  - Contains 1 autonomous agent. To use this agent, you need to set an [Environment Variables](#environment-variables).
-     - **if_if** : Second best performing <a href="https://leaderboard.carla.org">CARLA Leaderboard 1</a> SENSORS track agent.
-  - <a href="https://github.com/opendilab/InterFuser">Repository</a>
+### SimLingo
 
-## How to Use
-First, run CARLA. You **only** need -vulkan for LBC, WoR, and LAV agents
-```Shell
+Also known as CarLLava, it is a vision-language-action (VLA) model that drives from cameras only and aligns its driving actions with language reasoning; it secured first place at the SENSORS track.
+
+-   `simlingo_simlingo`: The best-performing agent, which secured first place at [CARLA Leaderboard 2](https://leaderboard.carla.org) SENSORS track (previously named CarLLava).
+        
+
+### LMDrive
+
+-   `lmdrive_llava`: Best-performing LMDrive agent.
+        
+-   `lmdrive_vicuna`: Second-best-performing LMDrive agent.
+        
+-   `lmdrive_llama`: Third-best-performing LMDrive agent.
+
+        
+### ThinkTwice
+
+-   `tt_tt`: The base ThinkTwice agent.
+
+
+### ORION
+
+A VLA model pairing a ~7B LLaVA/Vicuna LLM with an EVA-ViT backbone over six surround cameras, turning vision-language instructions into driving trajectories.
+-   `orion_base`: The base ORION agent.
+
+### MindDrive
+
+A VLA model and the direct successor to ORION, replacing the single large LLM with a compact Qwen2-0.5B or Qwen2.5-3B carrying two LoRA experts, one for scene reasoning, one for trajectory generation, refined by online reinforcement learning.
+-   `minddrive_05b`: The smaller variant with Qwen2-0.5B
+-   `minddrive_3b`: The larger variant with Qwen2.5-3B
+  
+### TransfuserV3
+
+Also known as Transfuser. See [the history of Transfuser](https://ln2697.github.io/lead/docs/transfuser_versions.html).
+
+-   `tfv3_tf`: The main Transfuser agent.
+        
+-   `tfv3_ltf`: The LatentTF agent.
+        
+-   `tfv3_lf`: The Late_Fusion agent.
+        
+-   `tfv3_gf`: The Geometric_Fusion agent.
+        
+
+### TransfuserV4
+
+Also known as Transfuser++ for Leaderboard 1.
+
+-   **Seeds:** Replace `#` with the seed number from **0 to 2** (e.g., `tfpp_l6_0`).
+        
+-   `tfv4_l6_#`: Best performing Transfuser++ agent. Second place at CARLA Leaderboard 2 SENSORS track.
+        
+-   `tfv4_lav_#`: Transfuser++ not trained on Town02 and Town05.
+        
+-   `tfv4_wp_#`: Transfuser++ WP from their paper's appendix.
+        
+-   `tfv4_aim_#`: Reproduction of the [AIM](https://openaccess.thecvf.com/content/CVPR2021/html/Prakash_Multi-Modal_Fusion_Transformer_for_End-to-End_Autonomous_Driving_CVPR_2021_paper.html) method.
+        
+### TransfuserV5
+
+Also known as Transfuser++ for Leaderboard 2. This version has a bit of similar performance as TransfuserV4
+
+-   `tfv5_alltowns`: This agent is trained with all towns.
+
+-   `tfv5_notown13`: This agent is trained excluding Town13.
+
+### TransfuserV6
+
+The most recent Transfuser agent, also known as the **Lead** agent.
+
+-   `tfv6_regnet`: Their best-performing agent that uses regnety032. Also known as the "Full TransFuser V6" variant.
+
+-   `tfv6_resnet`: The second-best-performing agent that uses resnet34.
+
+-   `tfv6_4cameras`: Uses 4cameras and resnet34. Also known as the "+ Rear camera" variant.
+
+-   `tfv6_noradar`: Uses resnet34 but no radar sensor. Also known as the "− Radar" variant.
+
+-   `tfv6_visiononly`: Vision-only driving model and ResNet34.
+
+-   `tfv6_notown13`: Uses resnet34 but Town13 is excluded. Also known as the "Town13 held out" variant.
+
+### CaRL
+
+-   `carl_carl_#`: CaRL agent with a driving score of 64. Replace `#` with **0 or 1**.
+        
+-   `carl_carlv11`: The best CaRL agent with a driving score of 73. Best open-source RL planner on longest6 v2 and nuPlan.
+
+
+### Roach
+
+-   `carl_roach_#`: The Roach planner agent ([paper](https://arxiv.org/abs/2108.08265)) reproduced by the authors of [CaRL](https://github.com/autonomousvision/CaRL/tree/main). Replace `#` with a number from **0 to 4** for the 5 available seeds.
+
+
+### PlanT
+
+-   `carl_plant_#`: The PlanT planner agent ([paper](https://arxiv.org/abs/2210.14222)) reproduced by the authors of [CaRL](https://github.com/autonomousvision/CaRL/tree/main). Replace `#` with a number from **0 to 4** for the 5 available seeds.
+
+### PlanT 2
+
+-   `plant2_plant2_#`: The PlanT 2.0 agent. Replace `#` with a number from **0 to 2** for the 3 available seeds.
+
+#### NEAT
+  
+-   `neat_neat`
+        
+-   `neat_aimbev`
+        
+-   `neat_aim2dsem`
+        
+-   `neat_aim2ddepth`
+
+
+####  Interfuser
+ 
+-   `if_if`: Second best performing [CARLA Leaderboard 1](https://leaderboard.carla.org) SENSORS track agent.
+
+#### Learning from All Vehicles (LAV)
+
+Make sure to run CARLA with the `-vulkan` flag before running this agent family.
+
+-   `lav_lav`: The original LAV agent.
+        
+-   `lav_fast`: Leaderboard submission optimized for inference speed with temporal LiDAR scans.
+        
+
+#### Learning By Cheating (LBC)
+
+Make sure to run CARLA with the `-vulkan` flag before running this agent family.
+
+-   `lbc_nc`: Learning By Cheating, the NoCrash model.
+        
+-   `lbc_lb`: Learning By Cheating, the Leaderboard model.
+        
+
+#### World on Rails (WoR)
+
+Make sure to run CARLA with the `-vulkan` flag before running this agent family.
+
+-   `wor_nc`: World on Rails, the NoCrash model.
+        
+-   `wor_lb`: World on Rails, the Leaderboard model.
+
+
+#### Autoware
+
+-   `autoware_v1`: Autoware bridge in PCLA. For a tutorial on using Autoware, please refer to the [Autoware README](pcla_agents/autoware/README.md).
+
+----------
+
+## 4. How to Use
+
+### Step 1: Run CARLA
+
+Start the CARLA simulator. You **only** need the `-vulkan` flag for LBC, WoR, and LAV agents.
+
+```Bash
 ./CarlaUE4.sh -vulkan
 ```
-Then open another terminal and run your code.</br>
-To use PCLA, simply import it and use the PCLA class to define an autonomous vehicle with your chosen autonomous agent.
-```python
+
+### Step 2: Integrate PCLA in Your Script
+
+Open a new terminal and run your custom Python code. To use PCLA, import the library, define your agent and route, and initialize the `PCLA` class.
+
+**Core Usage Snippet:**
+
+```Python
 from PCLA import PCLA
 
-agent = "neat_neat"
-route = "./sampleRoute.xml"
+# 1. Define Agent and Route
+agent = "tf_tf" # e.g., Transfuser
+route = "./sample_route.xml"
+
+# 2. Initialize PCLA (requires a CARLA client and a vehicle object)
 pcla = PCLA(agent, vehicle, route, client)
 
+# 3. Get action and apply control (within your simulation loop)
 ego_action = pcla.get_action()
 vehicle.apply_control(ego_action)
-```
-In the code above, the agent is your chosen autonomous agent. You can choose your agent from the list of [Autonomous Agents](#autonomous-agents).</br>
-You also need to pass the `route` that you want your vehicle to follow. The route should be in the format of the Leaderboard waypoints as an `XML` file.</br>
-To make it easy, PCLA provides you with a function called `routeMaker()` that gets an array of <a href="https://carla.readthedocs.io/en/latest/core_map/#waypoints" target="_blank">CARLA waypoints</a>, reformats it to a Leaderboard format, and save it as an XML file. A tutorial on how to use that is provided in [Navigation](#navigation)</br>
-The other arguments you have to pass to PCLA are the client and the vehicle you want to put the agent on. </br>
-To get one action in a frame from the agent and apply it to your vehicle, you can call the `pcla.get_action` method. </br>
-Example:
-```python
-ego_action = pcla.get_action()
-vehicle.apply_control(ego_action)
-```
-Finally, to destroy and cleanup the vehicle, sensors, and the PCLA variables, you can call
-```python
+
+# 4. Cleanup when done
 pcla.cleanup()
-```
-## Navigation
-You can use PCLA to generate waypoints between two locations or generate routes usable for PCLA.
-If you want to find locations to navigate your vehicle through the city, you can use the `spawn_points.py` file to see all the spawn points and their associated number.
-```shell
-python spawn_points.py
+
 ```
 
-<hr />
+### Explaining the Arguments:
 
-You can then use the `location_to_waypoint()` method to generate waypoints between two CARLA locations. For example:
-```python
+-   **`agent`**: Your chosen autonomous agent string (e.g., `"tf_tf"`). See [Autonomous Agents](#3-autonomous-agents).
+    
+-   **`route`**: The path to an XML file defining the vehicle's route, formatted according to the Leaderboard waypoints.
+    
+-   **`client` & `vehicle`**: The standard CARLA client and the ego-vehicle actor you wish to control.
+    
+
+----------
+
+## 5. Navigation
+
+PCLA provides utility functions to help you generate waypoints and routes usable by the agents.
+
+### 5.1 Finding Spawn Points
+
+To see all available spawn points and their associated index numbers in your current map:
+
+```Shell
+python pcla_functions/spawn_points.py
+```
+
+### 5.2 Generating Waypoints
+
+Use the `location_to_waypoint()` method to generate a sequence of CARLA waypoints between two CARLA locations.
+
+```Python
 from PCLA import location_to_waypoint
+import carla
 
-vehicle_spawn_points = world.get_map().get_spawn_points() # Carla spawn points
-startLoc = vehicle_spawn_points[31].location # Start location
-endLoc = vehicle_spawn_points[42].location # End location
-waypoints = location_to_waypoint(client, startLoc, endLoc) # Returns waypoints between two locations
+world = client.get_world()
+vehicle_spawn_points = world.get_map().get_spawn_points() # Get CARLA spawn points
+startLoc = vehicle_spawn_points[31].location              # Define Start location
+endLoc = vehicle_spawn_points[42].location                # Define End location
+
+# Returns a list of CARLA waypoints between the two locations
+waypoints = location_to_waypoint(client, startLoc, endLoc) 
+
 ```
 
-<hr />
+### 5.3 Creating the PCLA Route XML
 
-Then pass the waypoints to `route_maker()` to make the XML file usable for PCLA.
-```python
-PCLA.route_maker(waypoints)
-```
+Pass the generated CARLA waypoints to `route_maker()` to format them into a Leaderboard-compliant XML file that PCLA can read.
 
-<hr />
-
-All together:
-Example of generating XML route from a list of <a href="https://carla.readthedocs.io/en/latest/core_map/#waypoints" target="_blank">CARLA waypoints</a>
-extracted from two <a href="https://carla.readthedocs.io/en/latest/python_api/#carlalocation" target="_blank">CARLA locations</a>:
-
-```python
+```Python
 from PCLA import route_maker
-from PCLA import location_to_waypoint
+
+route_maker(waypoints, "route.xml")
+```
+
+### Full Navigation Example
+
+This combined example demonstrates generating an XML route from two [CARLA locations](https://carla.readthedocs.io/en/latest/python_api/#carlalocation):
+
+```Python
+from PCLA import route_maker, location_to_waypoint
+import carla
 
 client = carla.Client('localhost', 2000)
 world = client.get_world()
 
-vehicle_spawn_points = world.get_map().get_spawn_points() # Carla spawn points
-startLoc = vehicle_spawn_points[31].location # Start location
-endLoc = vehicle_spawn_points[42].location # End location
-waypoints = location_to_waypoint(client, startLoc, endLoc)  # Returns waypoints between two locations
-route_maker(waypoints, "route.xml")  # Returns waypoints usable for PCLA
+vehicle_spawn_points = world.get_map().get_spawn_points()
+startLoc = vehicle_spawn_points[31].location
+endLoc = vehicle_spawn_points[42].location
+
+# 1. Generate waypoints
+waypoints = location_to_waypoint(client, startLoc, endLoc)
+
+# 2. Create the PCLA XML route file
+route_maker(waypoints, "route.xml")
+
 ```
 
-## Environment Variables
-Transfuser++ and Interfuser require you to set an environment variable before using their agents.
-Environment variables for each agent are:
-- **tfpp_l6_#**
-  ```Shell
-  export UNCERTAINTY_THRESHOLD=033
-  ```
-- **tfpp_lav_#**
-  ```Shell
-  export STOP_CONTROL=1
-  ```
-- **tfpp_aim_#**
-  ```Shell
-  export DIRECT=0
-  ```
-- **tfpp_wp_#**
-  ```Shell
-  export DIRECT=0
-  ```
-- **if_if**
-  ```Shell
-  export ROUTES=path_to_route.xml
-  ```
-  The path to the same XML route file you used in PCLA
+----------
 
-Remember to unset a variable before using another agent.
-```Shell
-unset DIRECT
-```
+## 6. Sample Code
 
-## Sample Code
-A sample code is provided for you to test PCLA. Just go to the PCLA directory and run:
-```Shell
+A comprehensive sample script is provided to help you test PCLA immediately.
+
+To run the sample (which uses the LAV agent in Town02):
+
+```Bash
 python sample.py
 ```
-This sample is in Town02 of the CARLA simulator and uses the LAV agent.
 
-***Attention: you may need to change the vehicle spawn point's number on line 43 to something else based on your CARLA version.***
+> **Attention:** You may need to change the vehicle spawn point's index number on **line 45** of `sample.py` based on your specific CARLA version.
 
-## FAQ
-Frequently asked questions and possible issues are solved in <a href="https://github.com/MasoudJTehrani/PCLA/issues?q=is%3Aissue+is%3Aclosed" target="_blank">the issues section</a>.
-If you have a request for a new agent, feel free to ask me.
+----------
 
-## Citation
-If you find PCLA useful, please consider giving it a star &#127775;, and cite the published <a href="https://dl.acm.org/doi/abs/10.1145/3696630.3728577">paper</a>.
+## 7. FAQ
 
+Frequently asked questions and possible issues are addressed and solved in [the PCLA issues section](https://github.com/MasoudJTehrani/PCLA/issues?q=is%3Aissue+is%3Aclosed).
+
+If you have a request for a new agent to be integrated into the framework, please feel free to open a new issue and ask!
+
+----------
+
+## 8. Citation
+
+If you find **PCLA** useful in your research or project, please consider giving it a star ⭐ and citing our published work.
 ```bibtex
 @inproceedings{tehrani2025pcla,
   title={PCLA: A Framework for Testing Autonomous Agents in the CARLA Simulator},

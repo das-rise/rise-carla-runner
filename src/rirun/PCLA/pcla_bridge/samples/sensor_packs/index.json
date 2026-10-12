@@ -1,0 +1,456 @@
+{
+  "packs": {
+    "minddrive_05b": {
+      "pack": "orion_base+minddrive_05b+minddrive_3b",
+      "sensors": [
+        "CAM_FRONT",
+        "CAM_FRONT_LEFT",
+        "CAM_FRONT_RIGHT",
+        "CAM_BACK",
+        "CAM_BACK_LEFT",
+        "CAM_BACK_RIGHT",
+        "IMU",
+        "GPS",
+        "SPEED"
+      ]
+    },
+    "tt_tt": {
+      "pack": "tt_tt",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "rgb_back",
+        "lidar",
+        "imu",
+        "gps",
+        "speed",
+        "topdown"
+      ]
+    },
+    "tfv5_alltowns": {
+      "pack": "tfv5_alltowns+notown13",
+      "sensors": [
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "tfv5_notown13": {
+      "pack": "tfv5_alltowns+notown13",
+      "sensors": [
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "tfv6_regnet": {
+      "pack": "tfv6_regnet+resnet+notown13",
+      "sensors": [
+        "rgb_1",
+        "rgb_2",
+        "rgb_3",
+        "lidar1",
+        "lidar2",
+        "radar1",
+        "radar2",
+        "radar3",
+        "radar4",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv6_resnet": {
+      "pack": "tfv6_regnet+resnet+notown13",
+      "sensors": [
+        "rgb_1",
+        "rgb_2",
+        "rgb_3",
+        "lidar1",
+        "lidar2",
+        "radar1",
+        "radar2",
+        "radar3",
+        "radar4",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv6_4cameras": {
+      "pack": "tfv6_4cameras+noradar+visiononly",
+      "sensors": [
+        "rgb_1",
+        "rgb_2",
+        "rgb_3",
+        "rgb_4",
+        "rgb_5",
+        "rgb_6",
+        "lidar1",
+        "lidar2",
+        "radar1",
+        "radar2",
+        "radar3",
+        "radar4",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv6_noradar": {
+      "pack": "tfv6_4cameras+noradar+visiononly",
+      "sensors": [
+        "rgb_1",
+        "rgb_2",
+        "rgb_3",
+        "rgb_4",
+        "rgb_5",
+        "rgb_6",
+        "lidar1",
+        "lidar2",
+        "radar1",
+        "radar2",
+        "radar3",
+        "radar4",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv6_visiononly": {
+      "pack": "tfv6_4cameras+noradar+visiononly",
+      "sensors": [
+        "rgb_1",
+        "rgb_2",
+        "rgb_3",
+        "rgb_4",
+        "rgb_5",
+        "rgb_6",
+        "lidar1",
+        "lidar2",
+        "radar1",
+        "radar2",
+        "radar3",
+        "radar4",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv6_notown13": {
+      "pack": "tfv6_regnet+resnet+notown13",
+      "sensors": [
+        "rgb_1",
+        "rgb_2",
+        "rgb_3",
+        "lidar1",
+        "lidar2",
+        "radar1",
+        "radar2",
+        "radar3",
+        "radar4",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv3_tf": {
+      "pack": "tfv3_tf+lf+gf",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "tfv3_ltf": {
+      "pack": "tfv3_ltf",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv3_lf": {
+      "pack": "tfv3_tf+lf+gf",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "tfv3_gf": {
+      "pack": "tfv3_tf+lf+gf",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "lav_lav": {
+      "pack": "lav_lav+fast",
+      "sensors": [
+        "EGO",
+        "GPS",
+        "IMU",
+        "LIDAR",
+        "RGB_0",
+        "RGB_1",
+        "RGB_2",
+        "TEL_RGB"
+      ]
+    },
+    "lav_fast": {
+      "pack": "lav_lav+fast",
+      "sensors": [
+        "EGO",
+        "GPS",
+        "IMU",
+        "LIDAR",
+        "RGB_0",
+        "RGB_1",
+        "RGB_2",
+        "TEL_RGB"
+      ]
+    },
+    "lbc_lb": {
+      "pack": "lbc_lb+nc",
+      "sensors": [
+        "EGO",
+        "GPS",
+        "RGB_0",
+        "RGB_1",
+        "RGB_2"
+      ]
+    },
+    "lbc_nc": {
+      "pack": "lbc_lb+nc",
+      "sensors": [
+        "EGO",
+        "GPS",
+        "RGB_0",
+        "RGB_1",
+        "RGB_2"
+      ]
+    },
+    "wor_lb": {
+      "pack": "wor_lb+nc",
+      "sensors": [
+        "EGO",
+        "GPS",
+        "Wide_RGB_0",
+        "Wide_RGB_1",
+        "Wide_RGB_2",
+        "Narrow_RGB"
+      ]
+    },
+    "wor_nc": {
+      "pack": "wor_lb+nc",
+      "sensors": [
+        "EGO",
+        "GPS",
+        "Wide_RGB_0",
+        "Wide_RGB_1",
+        "Wide_RGB_2",
+        "Narrow_RGB"
+      ]
+    },
+    "simlingo_simlingo": {
+      "pack": "simlingo_simlingo",
+      "sensors": [
+        "rgb_0",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv4_lav_0": {
+      "pack": "tfv4_lav+wp+l6",
+      "sensors": [
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "tfv4_aim_0": {
+      "pack": "tfv4_aim",
+      "sensors": [
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "tfv4_wp_0": {
+      "pack": "tfv4_lav+wp+l6",
+      "sensors": [
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "tfv4_l6_0": {
+      "pack": "tfv4_lav+wp+l6",
+      "sensors": [
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed",
+        "lidar"
+      ]
+    },
+    "neat_neat": {
+      "pack": "neat_neat",
+      "sensors": [
+        "rgb",
+        "rgb_left",
+        "rgb_right",
+        "rgb_front",
+        "bev",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "neat_aimbev": {
+      "pack": "neat_aimbev+aim2dsem+aim2ddepth",
+      "sensors": [
+        "rgb",
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "neat_aim2dsem": {
+      "pack": "neat_aimbev+aim2dsem+aim2ddepth",
+      "sensors": [
+        "rgb",
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "neat_aim2ddepth": {
+      "pack": "neat_aimbev+aim2dsem+aim2ddepth",
+      "sensors": [
+        "rgb",
+        "rgb_front",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "if_if": {
+      "pack": "if_if",
+      "sensors": [
+        "rgb",
+        "rgb_left",
+        "rgb_right",
+        "lidar",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "orion_base": {
+      "pack": "orion_base+minddrive_05b+minddrive_3b",
+      "sensors": [
+        "CAM_FRONT",
+        "CAM_FRONT_LEFT",
+        "CAM_FRONT_RIGHT",
+        "CAM_BACK",
+        "CAM_BACK_LEFT",
+        "CAM_BACK_RIGHT",
+        "IMU",
+        "GPS",
+        "SPEED"
+      ]
+    },
+    "minddrive_3b": {
+      "pack": "orion_base+minddrive_05b+minddrive_3b",
+      "sensors": [
+        "CAM_FRONT",
+        "CAM_FRONT_LEFT",
+        "CAM_FRONT_RIGHT",
+        "CAM_BACK",
+        "CAM_BACK_LEFT",
+        "CAM_BACK_RIGHT",
+        "IMU",
+        "GPS",
+        "SPEED"
+      ]
+    },
+    "lmdrive_llava": {
+      "pack": "lmdrive_llava+vicuna+llama",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "rgb_rear",
+        "lidar",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "lmdrive_vicuna": {
+      "pack": "lmdrive_llava+vicuna+llama",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "rgb_rear",
+        "lidar",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    },
+    "lmdrive_llama": {
+      "pack": "lmdrive_llava+vicuna+llama",
+      "sensors": [
+        "rgb_front",
+        "rgb_left",
+        "rgb_right",
+        "rgb_rear",
+        "lidar",
+        "imu",
+        "gps",
+        "speed"
+      ]
+    }
+  },
+  "not_portable": {
+    "autoware_v1": "not a run_step model (external ROS 2 stack)",
+    "plant2_plant2_0": "privileged: reads simulator ground-truth (ego pose / BEV map)",
+    "carl_carl_0": "privileged: reads simulator ground-truth (ego pose / BEV map)",
+    "carl_carlv11": "privileged: reads simulator ground-truth (ego pose / BEV map)",
+    "carl_roach_0": "privileged: reads simulator ground-truth (ego pose / BEV map)",
+    "carl_plant_0": "privileged: reads simulator ground-truth (ego pose / BEV map)"
+  }
+}

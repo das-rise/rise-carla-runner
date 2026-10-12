@@ -5,6 +5,7 @@ src/rirun.egg-info/*
 .vscode/*
 output/*
 pretrained/
+wandb/
 .env
 scenes/dresden-listdb/
 scenes/roundabout-saro/

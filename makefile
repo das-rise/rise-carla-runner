@@ -44,7 +44,7 @@ env.cuda:
 # Project installation
 # ---------------------------
 install:
-	$(CONDA) run -n $(ENV_NAME) $(PIP) install -e .
+	$(CONDA) run --no-capture-output -n $(ENV_NAME) $(PIP) install -e .
 	@if [ -f .env ]; then . ./.env; fi; \
 	PYTHON_VERSION="$${PYTHON_VERSION:-$(PYTHON_VERSION)}"; \
 	if [ -n "$$CARLA_ROOT" ]; then \
@@ -54,20 +54,20 @@ install:
 			echo "ERROR: Could not find $$CARLA_ROOT/PythonAPI/carla/dist/carla-*-$$python_tag-$$python_tag-*.whl"; \
 			exit 1; \
 		fi; \
-		$(CONDA) run -n $(ENV_NAME) $(PIP) install --force-reinstall "$$carla_wheel"; \
+		$(CONDA) run --no-capture-output -n $(ENV_NAME) $(PIP) install --force-reinstall "$$carla_wheel"; \
 		echo "→ Installed CARLA Python wheel: $$carla_wheel"; \
 	fi
 # install pre-trained weights
-	@bash build-scripts/install-weights.sh
+	@$(CONDA) run --no-capture-output -n $(ENV_NAME) bash build-scripts/install-weights.sh
 	@echo "→ Installed project (core dependencies)"
 
 install-dev: install
-	$(CONDA) run -n $(ENV_NAME) $(PIP) install -e ".[train,dev]"
+	$(CONDA) run --no-capture-output -n $(ENV_NAME) $(PIP) install -e ".[train,dev]"
 	$(MAKE) hooks
 	@echo "→ Installed project (development dependencies)"
 
 hooks:
-	$(CONDA) run -n $(ENV_NAME) pre-commit install
+	$(CONDA) run --no-capture-output -n $(ENV_NAME) pre-commit install
 	@echo "→ Installed pre-commit hooks"
 
 # ---------------------------

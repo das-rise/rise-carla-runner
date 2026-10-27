@@ -130,7 +130,7 @@ bash docker/start-carla-docker.sh path/to/cooked_map.tar.gz
 `start-carla-docker.sh` automatically uses `carla-0.9.15:dtt-map-import` when it is present (override with `CARLA_IMAGE` in `.env`) and falls back to the official prebuilt image with a warning otherwise. The map archive is imported into the container on startup; the `[map-import] DONE` marker in the output confirms success, and you can then load the map from the Python client with, for example, `world.load_world("/Game/CustomMaps/<map_name>.<map_name>")`.
 
 > [!NOTE]
-> The CARLA source in this image is stock `0.9.15` plus the *runtime* C++ subset of the DTT patch (`docker/patches/carla-0.9.15-digital-twin.patch`), which is what makes single-level DTT maps simulatable. Without it the server segfaults on the first tick after a map load: `ALargeMapManager` puts actors to sleep on maps without tiles, and `ASensor::EndPlay` then dereferences the never-started sensor's stream token. Map-creation tooling (Streetmap/CarlaTools/Houdini plugins, DTT build scripts, default-map config) is deliberately not part of the image.
+> The CARLA source in this image is stock `0.9.15` plus the *runtime* C++ subset of the DTT patch (`docker/patches/carla-0.9.15-digital-twin.patch`), which is what makes single-level DTT maps simulatable.
 
 ## Example run
 

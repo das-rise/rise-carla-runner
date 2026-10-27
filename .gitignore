@@ -7,6 +7,8 @@ output/*
 pretrained/
 wandb/
 .env
+docker/carla-build/
+docker/carla-output/
 scenes/dresden-listdb/
 scenes/roundabout-saro/
 scenes/ekas-landvag/

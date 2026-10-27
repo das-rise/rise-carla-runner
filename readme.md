@@ -11,6 +11,7 @@
 - [Setup](#setup)
 - [Getting Carla set up in a container](#getting-carla-set-up-in-a-container)
   - [Building, starting and stopping the Carla container](#building-starting-and-stopping-the-carla-container)
+  - [Running Digital Twin Tool maps](#running-digital-twin-tool-maps)
 - [Example run](#example-run)
 - [Processing `.parquet` trajectories](#processing-parquet-trajectories)
 - [PCLA agent route generation](#pcla-agent-route-generation)
@@ -21,7 +22,7 @@
 
 - **Python 3.8** (required — see `requires-python` in `pyproject.toml`)
 - **conda** (Miniconda or Miniforge)
-- **Carla 0.9.15** — either a local installation (set `CARLA_ROOT` in `.env`) or via Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- **Carla 0.9.15** — via Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 - **NVIDIA GPU** with compatible drivers
 
 ## Setup
@@ -69,7 +70,7 @@ First, setup `Docker` for your user:
 4. verify you can run docker commands without `sudo`:
    `docker run hello-world`
 
-Great! Now, we pull the `Carla` container (needs to download a few GBs of data):
+Great! Now, we pull the `Carla` container (needs to download a few GBs of data). This is only needed for the official fallback image; if you build the [Digital Twin Tool image](#running-digital-twin-tool-maps) you can skip this:
 `docker pull carlasim/carla:0.9.15`
 
 Before running `Carla` in the container, we need to install the `nvidia-docker2` package. Follow the instructions from https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#installation-guide.
@@ -82,20 +83,9 @@ _Build and start:_
 bash docker/start-carla-docker.sh
 ```
 
-To start the container with a locally built `Carla` package instead of the `carlasim/carla:0.9.15` runtime files, set `CARLA_ROOT` in `.env`. The directory must contain `CarlaUE4.sh` and `PythonAPI/carla/dist/carla-*.whl`. Use `PYTHON_VERSION` to select the matching Python API wheel when the build contains multiple wheels, for example `PYTHON_VERSION="3.8"` selects `PythonAPI/carla/dist/carla-*-cp38-cp38-*.whl`.
-
-```bash
-# .env
-CARLA_ROOT="/path/to/CARLA"
-PYTHON_VERSION="3.8"
-```
-
-```bash
-bash docker/start-carla-docker.sh
-```
+To use a different runtime image (e.g. a custom build), set `CARLA_IMAGE` in `.env` to its image name.
 
 _Stop:_
-And stop it:
 
 ```bash
 docker kill ID_HERE
@@ -107,6 +97,40 @@ Execute:
 ```bash
 bash docker/stop-carla-docker.sh
 ```
+
+### Running Digital Twin Tool maps
+
+Maps cooked with Digital Twin Tool (DTT) crash on load with the prebuilt `carlasim/carla:0.9.15` image: the prebuilt binary ships stock Unreal Engine 4.26 distance-field code that does not support DTT-generated static meshes (see [carla-simulator/carla#8696](https://github.com/carla-simulator/carla/issues/8696)). The fix is in the CARLA-patched Unreal Engine fork (`CarlaUnreal/UnrealEngine`, branch `carla`, commit `a288ae07`), so a working image is built from source with that engine.
+
+`docker/build-carla-docker.sh` produces a runtime-only image `carla-0.9.15:dtt-map-import` that contains **only the packaged CARLA** (server binary, engine binaries, content, Python API, `Import/`) — no Unreal Engine source, editor, or build toolchain.
+
+**Requirements**
+
+- Docker with [BuildKit](https://docs.docker.com/build/buildkit/) (default in modern Docker)
+- ~150 GB of free disk space for the base image, ~60 GB for the packaging step
+- First run only: a GitHub account that is a member of the Epic Games GitHub organization (for `CarlaUnreal/UnrealEngine`) and a token with access to that repository
+- Time: hours for the engine build (phase 1), one to three hours for the package build (phase 2)
+
+**Build:**
+
+```bash
+EPIC_USER="your-github-user" \
+EPIC_PASS="your-github-token" \
+bash docker/build-carla-docker.sh
+```
+
+Re-runs are fast: the base image is layer-cached, the third-party dependencies and the release tarball stay on the host in `docker/carla-build/` and `docker/carla-output/`, and no Epic credentials are needed once the base image exists. To pick up new commits of the engine `carla` branch, re-run with `--no-cache` (a cached shallow clone does not pull new commits). The image is labeled with the UE and CARLA git commits it was built from: `docker inspect --format '{{index .Config.Labels "carla_ue4_commit"}}' carla-0.9.15:dtt-map-import`.
+
+**Start with a cooked DTT map:**
+
+```bash
+bash docker/start-carla-docker.sh path/to/cooked_map.tar.gz
+```
+
+`start-carla-docker.sh` automatically uses `carla-0.9.15:dtt-map-import` when it is present (override with `CARLA_IMAGE` in `.env`) and falls back to the official prebuilt image with a warning otherwise. The map archive is imported into the container on startup; the `[map-import] DONE` marker in the output confirms success, and you can then load the map from the Python client with, for example, `world.load_world("/Game/CustomMaps/<map_name>.<map_name>")`.
+
+> [!NOTE]
+> The CARLA source in this image is stock `0.9.15` plus the *runtime* C++ subset of the DTT patch (`docker/patches/carla-0.9.15-digital-twin.patch`), which is what makes single-level DTT maps simulatable.
 
 ## Example run
 

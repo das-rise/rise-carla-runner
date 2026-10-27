@@ -4,42 +4,70 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
 env_file="$project_root/.env"
 
-CARLA_ROOT=""
-PYTHON_VERSION="3.8"
+CARLA_IMAGE=""
 if [[ -f "$env_file" ]]; then
     source "$env_file"
 fi
 
 CONTAINER_NAME="CARLA-0.9.15"
 
-# Function to display usage
+# Pick the runtime image. Order:
+#   1. CARLA_IMAGE from .env (explicit, trusted as-is)
+#   2. carla-0.9.15:dtt-map-import (fixed engine, see build-carla-docker.sh)
+#   3. official prebuilt CARLA, built from ./Dockerfile (fallback)
+DTT_IMAGE="carla-0.9.15:dtt-map-import"
+OFFICIAL_IMAGE="carla-synergies-0.9.15"
+if [[ -n "$CARLA_IMAGE" ]]; then
+    RUNTIME_IMAGE="$CARLA_IMAGE"
+elif docker image inspect "$DTT_IMAGE" >/dev/null 2>&1; then
+    RUNTIME_IMAGE="$DTT_IMAGE"
+else
+    echo "Note: ${DTT_IMAGE} not found, falling back to the official prebuilt CARLA image." >&2
+    echo "WARNING: Digital Twin maps crash on the official image at map load (carla-simulator/carla#8696)." >&2
+    echo "Build the fixed image with: bash docker/build-carla-docker.sh" >&2
+    docker build -t "$OFFICIAL_IMAGE" -f "$script_dir/Dockerfile" "$script_dir" || { echo "Errors during docker build, exiting."; exit 1; }
+    RUNTIME_IMAGE="$OFFICIAL_IMAGE"
+fi
+
 usage() {
-	echo "Usage: $0 [path/to/cooked_map.tar.gz]"
-	echo "Set CARLA_ROOT in $env_file to mount a locally built CARLA package."
-	echo "CARLA_ROOT should contain CarlaUE4.sh and PythonAPI/carla/dist/*.egg."
-	echo "A map archive can only be given when CARLA_ROOT is empty."
+    echo "Start a CARLA container with optional DTT map import."
+    echo ""
+    echo "Usage: $0 [path/to/cooked_map.tar.gz]"
+    echo "       $0 --help"
+    echo ""
+    echo "Image selection (first match wins):"
+    echo "  1. CARLA_IMAGE from $env_file (explicit override)"
+    echo "  2. carla-0.9.15:dtt-map-import (built by docker/build-carla-docker.sh)"
+    echo "  3. official carlasim/carla:0.9.15 via docker/Dockerfile (DTT maps"
+    echo "     crash on it - carla-simulator/carla#8696)"
 }
 
+case "${1:-}" in
+    --help|-h)
+        usage
+        exit 0
+        ;;
+esac
+
 map_archive=""
-if [[ -n "$1" ]]; then
-    if [[ -n "$CARLA_ROOT" ]]; then
-        echo "Warning: a map archive was given, but CARLA_ROOT is set in $env_file. Clear CARLA_ROOT to import a map." >&2
-        exit 1
-    fi
+if [[ -n "${1:-}" ]]; then
     if ! [[ -f "$1" ]]; then
         echo "Map archive not found: $1" >&2
+        echo "Run with --help for usage." >&2
         exit 1
     fi
     map_archive="$(realpath "$1")"
 fi
 
-containerid=$(docker ps | grep carla | awk ' { print $1 } ')
+# Only match this project's server images, not e.g. carla-editor containers.
+containerid=$(docker ps --format '{{.ID}} {{.Image}}' \
+    | awk '$2 ~ /carla-0\.9\.15|carlasim\/carla|carla-synergies/ {print $1}')
 if ! [[ -z "$containerid" ]]; then
     trap 'echo; echo "Exiting."; exit 130' INT
     printf "Found running Carla container(s): %s\n" "$containerid"
-    read -p "Choose: [k]ill existing and start new, [s]tart another, or [e]xit? [k/s/e]: " response
+    read -p "Choose: [k]ill existing and start new (default), or [e]xit? [k/e]: " response
     case $response in
-        [kK]*)
+        "" | [kK]*)
             docker kill $containerid > /dev/null 2>&1
             docker rm $containerid > /dev/null 2>&1
             echo "Existing container(s) killed."
@@ -49,50 +77,46 @@ if ! [[ -z "$containerid" ]]; then
             exit 0
             ;;
         *)
-            echo "Starting new container..."
+            echo "Invalid choice: '$response'" >&2
+            usage >&2
+            exit 1
             ;;
     esac
 fi
 
-# build the container
-docker build -t carla-synergies-0.9.15 -f "$script_dir/Dockerfile" "$script_dir" || { echo "Errors during docker build, exiting."; exit 1; }
 
-if ! [[ -z "$CARLA_ROOT" ]]; then # if using a locally built CARLA package instead of the container
-    if ! [[ -f "$CARLA_ROOT/CarlaUE4.sh" ]]; then
-        echo "Could not find CarlaUE4.sh in CARLA_ROOT: $CARLA_ROOT" >&2
-        exit 1
-    fi
-    docker run -d --privileged \
-        --gpus=all -p 2000-2002:2000-2002 \
-        -v "$CARLA_ROOT:/opt/carla-custom:rw" \
-        --tmpfs /opt/carla-custom/CarlaUE4/Content/Carla/Maps/OpenDrive:uid=1000,gid=1000,mode=775 \
-        --tmpfs /opt/carla-custom/CarlaUE4/Content/Carla/Maps/Nav:uid=1000,gid=1000,mode=775 \
-        -e CARLA_ROOT=/opt/carla-custom \
-        --name "$CONTAINER_NAME" \
-        carla-synergies-0.9.15 \
-        /bin/bash /opt/carla-custom/CarlaUE4.sh -RenderOffScreen
-else # using the container directly
-    map_args=()
-    start_cmd="exec ./CarlaUE4.sh -RenderOffScreen"
-    if [[ -n "$map_archive" ]]; then
-        map_name="$(basename "$map_archive")"
-        map_args=(-v "$map_archive:/tmp/map-import/$map_name:ro")
-        # import, print a marker line with the result, and only start CARLA if the import worked
-        start_cmd="cp \"/tmp/map-import/$map_name\" Import/ && ./ImportAssets.sh; rc=\$?; "
-        start_cmd+="if [ \$rc -ne 0 ]; then echo \"[map-import] FAILED (exit code \$rc)\"; exit \$rc; fi; "
-        start_cmd+="echo \"[map-import] DONE: $map_name imported\"; exec ./CarlaUE4.sh -RenderOffScreen -stdout -FullStdOutLogOutput"
-    fi
-    docker rm "$CONTAINER_NAME" >/dev/null 2>&1  # remove a stopped leftover with the same name
-    docker run -d --privileged \
-        --gpus=all -p 2000-2002:2000-2002 \
-        "${map_args[@]}" \
-        --name "$CONTAINER_NAME" \
-        carla-synergies-0.9.15 \
-        /bin/bash -c "cd /home/carla && $start_cmd" || exit 1
+map_args=()
+# -NOLOGTOMEMORY: packaged (Shipping) games log to memory only by default.
+#   (The packaged build may still not write a log file; the crash report below
+#   is the reliable debugging artifact.)
+# Crash reporting: callstack (Diagnostics.txt) + context in
+#   /home/carla/.config/Epic/CarlaUE4/Saved/Crashes/crashinfo-CarlaUE4-pid-<pid>-<guid>/
+#   Headless (no DISPLAY) makes UE treat the run as unattended, which skips the
+#   whole crash-report block. Enable it two ways (either suffices):
+#   - DISPLAY=:99 on docker run (dummy value; SDL just falls back to its dummy driver)
+#   - bAgreeToCrashUpload=True appended to Engine.ini before the server starts
+crash_cfg_cmd="printf '\\n[CrashReportClient]\\nbAgreeToCrashUpload=True\\n' >> ./CarlaUE4/Config/Engine.ini; "
+start_cmd="${crash_cfg_cmd}exec ./CarlaUE4.sh -RenderOffScreen -NOLOGTOMEMORY"
+if [[ -n "$map_archive" ]]; then
+    map_name="$(basename "$map_archive")"
+    map_args=(-v "$map_archive:/tmp/map-import/$map_name:ro")
+    # import, print a marker line with the result, and only start CARLA if the import worked
+    start_cmd="cp \"/tmp/map-import/$map_name\" Import/ && ./ImportAssets.sh; rc=\$?; "
+    start_cmd+="if [ \$rc -ne 0 ]; then echo \"[map-import] FAILED (exit code \$rc)\"; exit \$rc; fi; "
+    start_cmd+="echo \"[map-import] DONE: $map_name imported\"; ${crash_cfg_cmd}exec ./CarlaUE4.sh -RenderOffScreen -stdout -FullStdOutLogOutput -NOLOGTOMEMORY"
 fi
+docker rm "$CONTAINER_NAME" >/dev/null 2>&1  # remove a stopped leftover with the same name
+docker run -d --privileged \
+    --gpus=all -p 2000-2002:2000-2002 \
+    "${map_args[@]}" \
+    -e DISPLAY=:99 \
+    --name "$CONTAINER_NAME" \
+    "$RUNTIME_IMAGE" \
+    /bin/bash -c "cd /home/carla && $start_cmd" || exit 1
+
 
 # report the map import result on the host
-if [[ -n "$map_archive" && -z "$CARLA_ROOT" ]]; then
+if [[ -n "$map_archive" ]]; then
     echo "Importing $(basename "$map_archive")..."
     exec 3< <(docker logs -f "$CONTAINER_NAME" 2>&1)
     logs_pid=$!

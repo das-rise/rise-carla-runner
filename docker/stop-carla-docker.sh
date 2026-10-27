@@ -4,7 +4,9 @@ if [ "$1" = "--force" ]; then
   force=true
 fi
 
-containerid=$(docker ps | grep carla | awk ' { print $1 } ')
+# Only match this project's server images, not e.g. carla-editor containers.
+containerid=$(docker ps --format '{{.ID}} {{.Image}}' \
+    | awk '$2 ~ /carla-0\.9\.15|carlasim\/carla|carla-synergies/ {print $1}')
 if [ -z "$containerid" ]; then
   echo "No running Carla container found."
 else

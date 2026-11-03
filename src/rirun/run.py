@@ -17,6 +17,12 @@ from traj_convert.carla2traj import Carla2Traj
 from rirun.kinetics.movement import BehaviorMovement, PCLA_Movement
 from rirun.kinetics.scene_object_entropy import SceneObjectEntropyTracker
 from rirun.kinetics.trajectory_utils import process_trajectory_file
+from rirun.kinetics.vehicle_models import (
+    PCLA_RESERVED_COLOR,
+    VehicleModel,
+    color_from_filename,
+    parse_vehicle_filename,
+)
 from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from rirun.utils.bling import rirun
@@ -448,7 +454,7 @@ def main() -> None:
     trajectories_list = []
     for file in args.npc_trajectory_filepaths:
         try:
-            vehicle_name = os.path.basename(file).split(".")[0]
+            vehicle_name = os.path.splitext(os.path.basename(file))[0]
             trajectories_list.append(
                 (
                     process_trajectory_file(
@@ -460,6 +466,7 @@ def main() -> None:
                         offset=args.npc_trajectory_offset,
                     ),
                     vehicle_name,
+                    file,
                 )
             )
         except Exception as e:
@@ -471,7 +478,7 @@ def main() -> None:
     # Prepare vehicles on rails and initial speed vectors
     vehicles = []
     start_vectors = []
-    for trajectory, vehicle_name in trajectories_list:
+    for trajectory, vehicle_name, trajectory_file in trajectories_list:
         if args.npc_movement == "behavior_agent":
             movement = BehaviorMovement(
                 client,
@@ -481,12 +488,32 @@ def main() -> None:
             )
         else:
             movement = args.npc_movement
+        # Pick the vehicle model from the size encoded in the file name
+        # (``vehicle_{vehicle_id}_{vehicle_type}_{size}.csv``) and a
+        # deterministic color from the file name (red is reserved for PCLA
+        # agents).
+        parsed = parse_vehicle_filename(trajectory_file)
+        if parsed is not None:
+            _, vehicle_type, size = parsed
+            blueprint = VehicleModel.best_match(size).blueprint
+            logging.info(
+                f"Vehicle {vehicle_name}: size {size} m ({vehicle_type}) -> {blueprint}"
+            )
+        else:
+            blueprint = "model3"
+            logging.warning(
+                f"Vehicle {vehicle_name}: file name does not match "
+                "'vehicle_{vehicle_id}_{vehicle_type}_{size}.csv', "
+                f"using default blueprint '{blueprint}'."
+            )
         new_vehicle = Vehicle(
             world,
             trajectory,
             vehicle_name,
             movement=movement,
             deviation_statistics=args.trajectory_statistics,
+            blueprint=blueprint,
+            color=color_from_filename(trajectory_file),
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (
@@ -535,6 +562,7 @@ def main() -> None:
                 pcla_movement,
                 blueprint="vehicle.audi.etron",
                 role_name="hero",
+                color=PCLA_RESERVED_COLOR,
             )
         vehicles.append(ego_vehicle)
 

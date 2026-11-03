@@ -1,16 +1,18 @@
+import logging
+from typing import NamedTuple, Optional, Union
+
 import carla
+
+from rirun.kinetics.actor import Actor
 from rirun.kinetics.movement import (
     MovementPolicy,
     PIDMovement,
     PIDMovementTimestampAdvanced,
     TeleportMovement,
 )
-from rirun.kinetics.trajectory import Trajectory
-import logging
-from typing import NamedTuple, Union, Optional
 from rirun.kinetics.stats import Average_Distance_True
+from rirun.kinetics.trajectory import Trajectory
 from rirun.kinetics.trajectory_utils import get_first_xml_waypoint
-from rirun.kinetics.actor import Actor
 
 
 class Vehicle(Actor):
@@ -27,6 +29,7 @@ class Vehicle(Actor):
         blueprint: str = "model3",
         deviation_statistics: Optional[str] = None,
         role_name: str = "npc",
+        color: Optional[carla.Color] = None,
     ) -> None:
         """
         Initialize an actor with a specified trajectory, movement policy, and vehicle blueprint.
@@ -52,12 +55,33 @@ class Vehicle(Actor):
                 Which trajectory deviation statistics to compute during the run. Can be:
                 - `"average_distance_true"`: computes the average distance between the reference and true position for all timestamps in a trajectory.
                 Defaults to `None`.
+            role_name (str, optional):
+                The role name to set on the blueprint, e.g., `"npc"` or `"hero"`.
+                Defaults to `"npc"`.
+            color (Optional[carla.Color], optional):
+                Color to apply to the vehicle after spawning (if the blueprint
+                supports it). Defaults to `None` (no color change).
         """
 
         self.name = name
         self._world = world
+        self._color = color
         blueprint_library = world.get_blueprint_library()
-        self._blueprint = blueprint_library.filter(blueprint)[0]
+        # `filter` treats the argument as a regex and returns candidates;
+        # require an exact type_id match and fall back to the default
+        # blueprint if the requested one is not available in this world.
+        # Note: on the Python side, ActorBlueprint.id is the type id string
+        # (e.g. "vehicle.tesla.model3"), not an integer.
+        self._blueprint = next(
+            (bp for bp in blueprint_library.filter(blueprint) if bp.id == blueprint),
+            None,
+        )
+        if self._blueprint is None:
+            logging.warning(
+                f"Vehicle blueprint '{blueprint}' not found in the world; "
+                "falling back to default blueprint 'model3'."
+            )
+            self._blueprint = blueprint_library.filter("model3")[0]
         if self._blueprint.has_attribute("role_name"):
             self._blueprint.set_attribute("role_name", role_name)
 
@@ -128,7 +152,8 @@ class Vehicle(Actor):
         # return without spawning so the movement policy retries on the next tick.
         _safe_radius = 8.0
         nearby = [
-            a for a in self._world.get_actors().filter("*vehicle*")
+            a
+            for a in self._world.get_actors().filter("*vehicle*")
             if a.get_location().distance(transform.location) < _safe_radius
         ]
         if nearby:
@@ -140,15 +165,25 @@ class Vehicle(Actor):
 
         for z_delta in [0.0, 0.5, 1.0, 2.0, 4.0]:
             attempt = carla.Transform(
-                carla.Location(transform.location.x, transform.location.y, transform.location.z + z_delta),
+                carla.Location(
+                    transform.location.x,
+                    transform.location.y,
+                    transform.location.z + z_delta,
+                ),
                 transform.rotation,
             )
             actor = self._world.try_spawn_actor(self._blueprint, attempt)
             if actor is not None:
                 self._actor = actor
+                if self._color is not None and self._blueprint.has_attribute("color"):
+                    try:
+                        actor.set_color(self._color)
+                    except Exception as e:
+                        logging.debug(f"{self.name}: could not set color: {e}")
                 self._mover.on_spawn(self)
                 logging.info(
-                    f"Spawned vehicle {self.name} at {attempt} [{self._mover.__class__.__name__}]"
+                    f"Spawned vehicle {self.name} [{self._blueprint.id}] "
+                    f"at {attempt} [{self._mover.__class__.__name__}]"
                 )
                 self._spawned = True
                 return
@@ -226,7 +261,7 @@ class Vehicle(Actor):
 
         if self._destroyed:
             return True  # If the vehicle is destroyed, we consider the z-coordinate to be valid by default.
-        if not getattr(self._mover, 'validate_z', True):
+        if not getattr(self._mover, "validate_z", True):
             return True  # Physics-enabled movement manages z itself; skip the check.
         if self._spawned:
             current_position = self.get_actor().get_transform().location
@@ -259,8 +294,9 @@ def spawn_behavior_npcs(
     Returns:
         List of Vehicle instances (already stepped once to trigger spawning).
     """
-    from rirun.kinetics.movement import BehaviorMovement
     import random
+
+    from rirun.kinetics.movement import BehaviorMovement
 
     spawn_points = world.get_map().get_spawn_points()
     random.shuffle(spawn_points)
@@ -282,7 +318,9 @@ def spawn_behavior_npcs(
     blueprint_library = world.get_blueprint_library()
     car_bps = blueprint_library.filter("vehicle.*")
     # exclude bikes / motorcycles for stability
-    car_bps = [bp for bp in car_bps if int(bp.get_attribute("number_of_wheels").as_int()) == 4]
+    car_bps = [
+        bp for bp in car_bps if int(bp.get_attribute("number_of_wheels").as_int()) == 4
+    ]
 
     for i, sp in enumerate(chosen):
         bp = random.choice(car_bps)
@@ -291,6 +329,7 @@ def spawn_behavior_npcs(
         mover = BehaviorMovement(client, behavior=npc_behavior)
         # We need a dummy Trajectory-like first_trajectory_point; use spawn point
         from rirun.kinetics.trajectory import CarlaTrajectoryPoint
+
         dummy_traj_point = CarlaTrajectoryPoint(transform=sp, time=0.0, speed=0.0)
 
         v = Vehicle.__new__(Vehicle)
@@ -302,6 +341,7 @@ def spawn_behavior_npcs(
         v._spawned = False
         v._destroyed = False
         v._deviation_statistics = None
+        v._color = None
         npcs.append(v)
 
     return npcs

@@ -153,3 +153,56 @@ def load_map(client: carla.Client, map_file: str) -> carla.World:
         return _load_from_opendrive(client, map_file)
     else:
         return _load_from_carla_map(client, map_file)
+
+
+class OpenDriveSpeedProvider:
+    """
+    Class for parsing speed information from an OpenDRIVE file and providing speed limits for given locations.
+    """
+
+    _xml_tree = None
+    _map = None
+    _previous_speed_limit = None
+
+    def __init__(self, xodr_filepath: str, map: carla.Map):
+        """Initialize the OpenDriveSpeedProvider by parsing the OpenDRIVE file.
+        Args:
+            xodr_filepath (str): Path to the OpenDRIVE file to parse.
+        """
+        self._map = map
+        import xml.etree.ElementTree as ET
+
+        self._xml_tree = ET.parse(xodr_filepath).getroot()
+
+    def get_speed_limit(self, location: carla.Location) -> float:
+        """Get the speed limit (km/h) at a given location by finding the corresponding
+        position in the OpenDRIVE file.
+
+        Args:
+            location (carla.Location): The location for which to get the speed limit.
+
+        Returns:
+            float: The speed limit at the given location in km/h.
+        """
+        DEFAULT_SPEED_LIMIT_MS = 30 / 3.6
+
+        waypoint = self._map.get_waypoint(location, project_to_road=True)
+
+        road_id = waypoint.road_id
+        s = waypoint.s
+        lane_id = waypoint.lane_id
+
+        for road in self._xml_tree.findall("road"):
+            if road.get("id") == str(road_id):
+                for lane_section in road.findall("lanes/laneSection"):
+                    if float(lane_section.get("s")) <= s:
+                        for lanetype in lane_section:  # lanetype = left, center, right
+                            for lane in lanetype.findall("lane"):
+                                if lane.get("id") == str(lane_id):
+                                    speed_element = lane.find("speed")
+                                    if speed_element is not None:
+                                        speed_limit_ms = float(speed_element.get("max"))
+                                        self._previous_speed_limit = speed_limit_ms
+                                        return speed_limit_ms
+
+        return self._previous_speed_limit or DEFAULT_SPEED_LIMIT_MS

@@ -58,6 +58,8 @@ def test_enum_sanity() -> None:
     for m in VehicleModel:
         assert m.blueprint.startswith("vehicle.")
         assert m.length > 0
+        # overall heights: passenger cars to buses/trucks
+        assert 1.0 <= m.height <= 3.0
 
 
 def test_best_match_known() -> None:

@@ -495,12 +495,15 @@ def main() -> None:
         parsed = parse_vehicle_filename(trajectory_file)
         if parsed is not None:
             _, vehicle_type, size = parsed
-            blueprint = VehicleModel.best_match(size).blueprint
+            model = VehicleModel.best_match(size)
+            blueprint = model.blueprint
+            height_m = model.height
             logging.info(
                 f"Vehicle {vehicle_name}: size {size} m ({vehicle_type}) -> {blueprint}"
             )
         else:
             blueprint = "model3"
+            height_m = None
             logging.warning(
                 f"Vehicle {vehicle_name}: file name does not match "
                 "'vehicle_{vehicle_id}_{vehicle_type}_{size}.csv', "
@@ -514,6 +517,7 @@ def main() -> None:
             deviation_statistics=args.trajectory_statistics,
             blueprint=blueprint,
             color=color_from_filename(trajectory_file),
+            height_m=height_m,
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (
@@ -547,6 +551,7 @@ def main() -> None:
                 behavior_movement,
                 blueprint="vehicle.audi.etron",
                 role_name="hero",
+                height_m=1.73,  # Audi e-tron overall height
             )
         else:
             logging.info(
@@ -563,6 +568,7 @@ def main() -> None:
                 blueprint="vehicle.audi.etron",
                 role_name="hero",
                 color=PCLA_RESERVED_COLOR,
+                height_m=1.73,  # Audi e-tron overall height
             )
         vehicles.append(ego_vehicle)
 

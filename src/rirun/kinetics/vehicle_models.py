@@ -20,43 +20,44 @@ import carla
 
 
 class VehicleModel(Enum):
-    """Relevant 4-wheeled CARLA vehicles: blueprint id -> overall length (m).
+    """Relevant 4-wheeled CARLA vehicles: blueprint id -> (length, height).
 
-    Lengths are real-world overall lengths (approximate, +/- 0.3 m), which is
-    good enough for "closest length" matching.  Sizes outside the listed
-    range clamp to the closest listed vehicle.
+    Lengths and heights are real-world overall dimensions (approximate,
+    +/- 0.3 m / +/- 0.1 m), which is good enough for "closest length"
+    matching and for placing the vehicle on the road at spawn time.  Sizes
+    outside the listed range clamp to the closest listed vehicle.
     """
 
-    AUDI_A2 = ("vehicle.audi.a2", 3.85)
-    AUDI_TT = ("vehicle.audi.tt", 4.18)
-    AUDI_ETRON = ("vehicle.audi.etron", 4.90)
-    BMW_GRANDTOURER = ("vehicle.bmw.grandtourer", 4.94)
-    CHEVROLET_IMPALA = ("vehicle.chevrolet.impala", 5.18)
-    CITROEN_C3 = ("vehicle.citroen.c3", 4.05)
-    DODGE_CHARGER_2020 = ("vehicle.dodge.charger_2020", 5.06)
-    DODGE_CHARGER_POLICE = ("vehicle.dodge.charger_police", 5.06)
-    DODGE_CHARGER_POLICE_2020 = ("vehicle.dodge.charger_police_2020", 5.06)
-    FORD_AMBULANCE = ("vehicle.ford.ambulance", 5.90)
-    FORD_CROWN = ("vehicle.ford.crown", 5.07)
-    FORD_MUSTANG = ("vehicle.ford.mustang", 4.84)
-    JEEP_WRANGLER_RUBICON = ("vehicle.jeep.wrangler_rubicon", 4.90)
-    LINCOLN_MKZ_2017 = ("vehicle.lincoln.mkz_2017", 5.00)
-    LINCOLN_MKZ_2020 = ("vehicle.lincoln.mkz_2020", 5.04)
-    MERCEDES_COUPE = ("vehicle.mercedes.coupe", 4.59)
-    MERCEDES_COUPE_2020 = ("vehicle.mercedes.coupe_2020", 4.97)
-    MERCEDES_SPRINTER = ("vehicle.mercedes.sprinter", 5.26)
-    MINI_COOPER_S = ("vehicle.mini.cooper_s", 3.83)
-    MINI_COOPER_S_2021 = ("vehicle.mini.cooper_s_2021", 3.83)
-    MITSUBISHI_FUSOROSA = ("vehicle.mitsubishi.fusorosa", 7.00)
-    NISSAN_MICRA = ("vehicle.nissan.micra", 3.99)
-    NISSAN_PATROL = ("vehicle.nissan.patrol", 4.86)
-    NISSAN_PATROL_2021 = ("vehicle.nissan.patrol_2021", 4.86)
-    SEAT_LEON = ("vehicle.seat.leon", 4.57)
-    TESLA_MODEL3 = ("vehicle.tesla.model3", 4.69)
-    TESLA_CYBERTRUCK = ("vehicle.tesla.cybertruck", 5.68)
-    TOYOTA_PRIUS = ("vehicle.toyota.prius", 4.54)
-    VOLKSWAGEN_T2 = ("vehicle.volkswagen.t2", 4.28)
-    CARLA_COLA = ("vehicle.carlamotors.carlacola", 4.20)
+    AUDI_A2 = ("vehicle.audi.a2", 3.85, 1.42)
+    AUDI_TT = ("vehicle.audi.tt", 4.18, 1.36)
+    AUDI_ETRON = ("vehicle.audi.etron", 4.90, 1.73)
+    BMW_GRANDTOURER = ("vehicle.bmw.grandtourer", 4.94, 1.70)
+    CHEVROLET_IMPALA = ("vehicle.chevrolet.impala", 5.18, 1.43)
+    CITROEN_C3 = ("vehicle.citroen.c3", 4.05, 1.45)
+    DODGE_CHARGER_2020 = ("vehicle.dodge.charger_2020", 5.06, 1.45)
+    DODGE_CHARGER_POLICE = ("vehicle.dodge.charger_police", 5.06, 1.36)
+    DODGE_CHARGER_POLICE_2020 = ("vehicle.dodge.charger_police_2020", 5.06, 1.45)
+    FORD_AMBULANCE = ("vehicle.ford.ambulance", 5.90, 2.60)
+    FORD_CROWN = ("vehicle.ford.crown", 5.07, 1.47)
+    FORD_MUSTANG = ("vehicle.ford.mustang", 4.84, 1.33)
+    JEEP_WRANGLER_RUBICON = ("vehicle.jeep.wrangler_rubicon", 4.90, 1.90)
+    LINCOLN_MKZ_2017 = ("vehicle.lincoln.mkz_2017", 5.00, 1.49)
+    LINCOLN_MKZ_2020 = ("vehicle.lincoln.mkz_2020", 5.04, 1.49)
+    MERCEDES_COUPE = ("vehicle.mercedes.coupe", 4.59, 1.41)
+    MERCEDES_COUPE_2020 = ("vehicle.mercedes.coupe_2020", 4.97, 1.40)
+    MERCEDES_SPRINTER = ("vehicle.mercedes.sprinter", 5.26, 2.00)
+    MINI_COOPER_S = ("vehicle.mini.cooper_s", 3.83, 1.42)
+    MINI_COOPER_S_2021 = ("vehicle.mini.cooper_s_2021", 3.83, 1.43)
+    MITSUBISHI_FUSOROSA = ("vehicle.mitsubishi.fusorosa", 7.00, 2.50)
+    NISSAN_MICRA = ("vehicle.nissan.micra", 3.99, 1.45)
+    NISSAN_PATROL = ("vehicle.nissan.patrol", 4.86, 1.88)
+    NISSAN_PATROL_2021 = ("vehicle.nissan.patrol_2021", 4.86, 1.88)
+    SEAT_LEON = ("vehicle.seat.leon", 4.57, 1.45)
+    TESLA_MODEL3 = ("vehicle.tesla.model3", 4.69, 1.44)
+    TESLA_CYBERTRUCK = ("vehicle.tesla.cybertruck", 5.68, 1.79)
+    TOYOTA_PRIUS = ("vehicle.toyota.prius", 4.54, 1.50)
+    VOLKSWAGEN_T2 = ("vehicle.volkswagen.t2", 4.28, 1.94)
+    CARLA_COLA = ("vehicle.carlamotors.carlacola", 4.20, 2.00)
 
     @property
     def blueprint(self) -> str:
@@ -67,6 +68,11 @@ class VehicleModel(Enum):
     def length(self) -> float:
         """Overall vehicle length in meters."""
         return self.value[1]
+
+    @property
+    def height(self) -> float:
+        """Overall vehicle height in meters."""
+        return self.value[2]
 
     @classmethod
     def best_match(cls, length_m: float) -> "VehicleModel":

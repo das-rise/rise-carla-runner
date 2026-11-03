@@ -13,6 +13,23 @@ from rirun.kinetics.movement import (
 from rirun.kinetics.stats import Average_Distance_True
 from rirun.kinetics.trajectory import Trajectory
 from rirun.kinetics.trajectory_utils import get_first_xml_waypoint
+from rirun.kinetics.vehicle_models import VehicleModel
+
+#: Half overall height per blueprint id, from the VehicleModel table.
+_BLUEPRINT_HALF_HEIGHTS = {m.blueprint: m.height / 2.0 for m in VehicleModel}
+
+#: Fallback half height (m) for blueprints not in the VehicleModel table
+#: (e.g. the DTT custom "model3"): a generic mid-size car.
+DEFAULT_HALF_HEIGHT_M = 0.9
+
+
+def half_height_for(blueprint_id: str) -> float:
+    """Half overall height (m) for a blueprint id.
+
+    Uses the VehicleModel table when the id is listed there, otherwise the
+    generic mid-size-car default.
+    """
+    return _BLUEPRINT_HALF_HEIGHTS.get(blueprint_id, DEFAULT_HALF_HEIGHT_M)
 
 
 class Vehicle(Actor):
@@ -30,6 +47,7 @@ class Vehicle(Actor):
         deviation_statistics: Optional[str] = None,
         role_name: str = "npc",
         color: Optional[carla.Color] = None,
+        height_m: Optional[float] = None,
     ) -> None:
         """
         Initialize an actor with a specified trajectory, movement policy, and vehicle blueprint.
@@ -61,11 +79,22 @@ class Vehicle(Actor):
             color (Optional[carla.Color], optional):
                 Color to apply to the vehicle after spawning (if the blueprint
                 supports it). Defaults to `None` (no color change).
+            height_m (Optional[float], optional):
+                Overall height of the vehicle in meters, used to place the
+                vehicle on the road when spawning (see `spawn`). Defaults to
+                `None`, in which case a generic mid-size-car height (1.8 m)
+                is assumed.
         """
 
         self.name = name
         self._world = world
         self._color = color
+        # Half of the overall height: CARLA vehicle actors are placed at the
+        # center of their bounding box, so the wheels sit ~half a height
+        # below the actor location.
+        self._half_height = (
+            height_m / 2.0 if height_m is not None else DEFAULT_HALF_HEIGHT_M
+        )
         blueprint_library = world.get_blueprint_library()
         # `filter` treats the argument as a regex and returns candidates;
         # require an exact type_id match and fall back to the default
@@ -137,16 +166,53 @@ class Vehicle(Actor):
             return
         self._mover.step(self, simulation_time, self._deviation_statistics)
 
+    # Small margin above the road surface so the spawn overlap test against
+    # the ground mesh does not fire on centimeter-level penetration.
+    _GROUND_MARGIN = 0.05
+    # Lift steps above the road z when the exact spot is blocked by an
+    # obstacle; beyond the last step the spot is considered unusable instead
+    # of floating the vehicle high above the street.
+    _Z_LADDERS = [0.0, 0.4, 0.8, 1.6]
+    # The exact ground fit (bounding box) is only applied when it agrees with
+    # the z that successfully spawned; a larger deviation indicates a wrong
+    # or far-away waypoint and must not yank the vehicle.
+    _GROUND_FIT_TOLERANCE = 0.75
+
+    def _ground_z(self, location: carla.Location) -> float:
+        """
+        Road surface elevation at the (x, y) of `location`, from the map's
+        lane tree (client-side query, no RPC). Falls back to the location's
+        own z when no road is found (off-road spawn point).
+        """
+        wp = self._world.get_map().get_waypoint(
+            carla.Location(location.x, location.y, location.z), project_to_road=True
+        )
+        return wp.transform.location.z if wp is not None else location.z
+
     def spawn(self, transform: carla.Transform = None) -> None:
         """
-        Spawn the vehicle at the location and rotation stored in `transform`
+        Spawn the vehicle at the location and rotation stored in `transform`.
+
+        The spawn height is derived from the road surface elevation at the
+        spawn point plus the vehicle's half height (wheels on the street,
+        no clipping, no floating). If the exact spot is blocked by an
+        obstacle, the vehicle is lifted in small steps (max 1.6 m above the
+        road); after a successful spawn, its z is refined to the exact
+        ground using the spawned actor's own bounding box.
+
         Args:
             transform (carla.Transform): The location and rotation at which the vehicle should spawn.
+                If `None`, the first trajectory point is used. The z component
+                only serves as a hint for the road query / off-road fallback;
+                the actual spawn height comes from the road surface.
         """
         if transform is None:
             loc = self.first_trajectory_point.transform.location
             rot = self.first_trajectory_point.transform.rotation
-            transform = carla.Transform(carla.Location(loc.x, loc.y, 0.3), rot)
+            transform = carla.Transform(carla.Location(loc.x, loc.y, loc.z), rot)
+
+        ground_z = self._ground_z(transform.location)
+        spawn_z = ground_z + self._half_height + self._GROUND_MARGIN
 
         # Safety pre-check: if another vehicle is already occupying the spawn area,
         # return without spawning so the movement policy retries on the next tick.
@@ -163,12 +229,12 @@ class Vehicle(Actor):
             )
             return  # _spawned stays False; movement policy will retry next tick
 
-        for z_delta in [0.0, 0.5, 1.0, 2.0, 4.0]:
+        for z_delta in self._Z_LADDERS:
             attempt = carla.Transform(
                 carla.Location(
                     transform.location.x,
                     transform.location.y,
-                    transform.location.z + z_delta,
+                    spawn_z + z_delta,
                 ),
                 transform.rotation,
             )
@@ -180,16 +246,30 @@ class Vehicle(Actor):
                         actor.set_color(self._color)
                     except Exception as e:
                         logging.debug(f"{self.name}: could not set color: {e}")
+                # Exact ground fit from the spawned actor's real collision
+                # box (works for any blueprint, not just the VehicleModel
+                # table): place the box bottom on the road surface.
+                final_transform = attempt
+                target_z = ground_z + actor.bounding_box.extent.z
+                if abs(target_z - attempt.location.z) <= self._GROUND_FIT_TOLERANCE:
+                    final_transform = carla.Transform(
+                        carla.Location(
+                            attempt.location.x, attempt.location.y, target_z
+                        ),
+                        attempt.rotation,
+                    )
+                    actor.set_transform(final_transform)
                 self._mover.on_spawn(self)
                 logging.info(
                     f"Spawned vehicle {self.name} [{self._blueprint.id}] "
-                    f"at {attempt} [{self._mover.__class__.__name__}]"
+                    f"at {final_transform} [{self._mover.__class__.__name__}]"
                 )
                 self._spawned = True
                 return
 
         logging.error(
-            f"Could not spawn vehicle {self.name} at {transform} (collision at all z offsets). Skipping."
+            f"Could not spawn vehicle {self.name} at {transform} (blocked up to "
+            f"{self._Z_LADDERS[-1]} m above road z {ground_z:.2f}). Skipping."
         )
         self._destroyed = True  # mark as failed so it is excluded from active_vehicles
         return
@@ -342,6 +422,7 @@ def spawn_behavior_npcs(
         v._destroyed = False
         v._deviation_statistics = None
         v._color = None
+        v._half_height = half_height_for(bp.id)
         npcs.append(v)
 
     return npcs

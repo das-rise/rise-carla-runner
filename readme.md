@@ -13,6 +13,7 @@
   - [Building, starting and stopping the Carla container](#building-starting-and-stopping-the-carla-container)
   - [Running Digital Twin Tool maps](#running-digital-twin-tool-maps)
 - [Example run](#example-run)
+- [OmegaPrime input (`.mcap`)](#omegaprime-input-mcap)
 - [Processing `.parquet` trajectories](#processing-parquet-trajectories)
 - [PCLA agent route generation](#pcla-agent-route-generation)
 - [PCLA addendum](#pcla-addendum)
@@ -155,6 +156,29 @@ Best to learn about usage of `run.py` by executing
 ```bash
 python src/rirun/run.py --help
 ```
+
+## OmegaPrime input (`.mcap`)
+
+[OmegaPrime](https://github.com/ika-rwth-aachen/omega-prime) recordings with OSI traces (e.g. produced by [COSMO](https://github.com/RI-SE/COSMO) from real-world data) can be used as NPC trajectory input. They are converted to per-vehicle trajectory CSVs by the standalone [`omegaprime2rirun`](helpers/omegaprime2rirun/) tool, which rirun then ingests exactly like any other CSV files:
+
+> [!NOTE]
+> The converter uses the `omega-prime`/`betterosi` python libraries, which require Python 3.10+, and therefore lives in its own [uv](https://docs.astral.sh/uv/) environment (see [helpers/omegaprime2rirun/README.md](helpers/omegaprime2rirun/README.md)). The `rirun` conda environment (Python 3.8) is unaffected.
+
+Convert a recording to one CSV per vehicle:
+
+```bash
+cd helpers/omegaprime2rirun
+uv sync
+uv run omegaprime2csv /path/OmegaPrime_xxx.mcap -o /tmp/omega_csvs
+```
+
+Each CSV is named `vehicle_{id}_{type}_{size}.csv` where the size is the vehicle's overall length in meters (median of the per-frame OSI lengths), so rirun automatically picks the CARLA vehicle model with the closest length (and a deterministic per-vehicle color). Coordinates and times are written as in the recording, so use the same `--npc_trajectory_offset` / `--offset_time` handling as for your other trajectory files:
+
+```bash
+python src/rirun/run.py <duration> <map> -tf /tmp/omega_csvs/*.csv --npc_trajectory_offset <X> <Y>
+```
+
+Options: `--types vehicle|vehicle-other|all` (default `vehicle`: only objects classified as VEHICLE), `--min-frames N` (default 3), `--heading-mode trace|straight|spline` (default `trace`: the trace yaw is written as a CSV column; `straight`/`spline` let rirun derive headings at run time).
 
 ## Processing `.parquet` trajectories
 

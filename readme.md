@@ -1,13 +1,6 @@
-# RISE-Carla-Runner
+<img src="media/rirun.png" width="250" align="center"/>
 
-```bash
-    ██████╗ ██╗██████╗ ██╗   ██╗███╗   ██╗
-    ██╔══██╗██║██╔══██╗██║   ██║████╗  ██║
-    ██████╔╝██║██████╔╝██║   ██║██╔██╗ ██║
-    ██╔══██╗██║██╔══██╗██║   ██║██║╚██╗██║
-    ██║  ██║██║██║  ██║╚██████╔╝██║ ╚████║
-    ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
-```
+# RISE-Carla-Runner
 
 **RiRun** (RISE Carla Runner) is a tool for creating parametrizable driving scenarios in the [Carla](https://carla.org/) simulator from real-world automotive trajectory data. It supports multiple autonomous driving agents via the [PCLA](https://github.com/MasoudJTehrani/PCLA) framework, trajectory replay with different movement modes, and can export simulation results as `.parquet` files which can then be converted to [ASAM OSI](https://www.asam.net/standards/detail/osi/) using the [`osi-gen`](https://github.com/das-rise/osi-gen) tool.
 

@@ -13,6 +13,7 @@
   - [Building, starting and stopping the Carla container](#building-starting-and-stopping-the-carla-container)
   - [Running Digital Twin Tool maps](#running-digital-twin-tool-maps)
 - [Example run](#example-run)
+- [OmegaPrime input (`.mcap`)](#omegaprime-input-mcap)
 - [Processing `.parquet` trajectories](#processing-parquet-trajectories)
 - [PCLA agent route generation](#pcla-agent-route-generation)
 - [PCLA addendum](#pcla-addendum)
@@ -155,6 +156,22 @@ Best to learn about usage of `run.py` by executing
 ```bash
 python src/rirun/run.py --help
 ```
+
+## OmegaPrime input (`.mcap`)
+
+OmegaPrime recordings with OSI traces (e.g. from [COSMO](https://github.com/RI-SE/COSMO)) can be used as NPC trajectory input: the standalone [`omegaprime2rirun`](helpers/omegaprime2rirun/) tool converts a `.mcap` to one CSV per vehicle, which rirun then ingests like any other trajectory file.
+
+> [!NOTE]
+> The converter needs Python 3.10+ (omega-prime/betterosi) and runs in its own uv environment; the rirun conda environment (Python 3.8) is unaffected.
+
+```bash
+cd helpers/omegaprime2rirun && uv sync
+uv run omegaprime2csv /path/OmegaPrime_xxx.mcap -o /tmp/omega_csvs
+
+python src/rirun/run.py <duration> <map> -tf /tmp/omega_csvs/*.csv --npc_trajectory_offset <X> <Y>
+```
+
+CSVs are named `vehicle_{id}_{type}_{size}.csv` (size = vehicle length in m), so rirun automatically picks the closest CARLA vehicle model. See `omegaprime2csv --help` for options.
 
 ## Processing `.parquet` trajectories
 

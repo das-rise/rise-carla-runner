@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omegaprime2rirun"
+version = "0.1.0"
+description = "Convert OmegaPrime (.mcap) OSI ground-truth recordings into rirun trajectory CSVs"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+  "omega-prime>=0.3.8",
+  "betterosi>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]
+
+[project.scripts]
+omegaprime2csv = "omegaprime2rirun.cli:main"
+
+[tool.setuptools]
+packages = ["omegaprime2rirun"]

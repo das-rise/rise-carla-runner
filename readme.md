@@ -23,12 +23,11 @@
 
 - **Python 3.8** (required — see `requires-python` in `pyproject.toml`)
 - **conda** (Miniconda or Miniforge)
-- **Carla 0.9.15** — via Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- **NVIDIA GPU** with compatible drivers
+- **Docker** with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) and **NVIDIA GPU** with compatible drivers
 
 ## Setup
 
-First, copy the example environment file and adjust it to your setup:
+Optionally, first copy the example environment file and adjust it to your setup:
 
 ```bash
 cp .env.example .env
@@ -87,13 +86,6 @@ bash docker/start-carla-docker.sh
 To use a different runtime image (e.g. a custom build), set `CARLA_IMAGE` in `.env` to its image name.
 
 _Stop:_
-
-```bash
-docker kill ID_HERE
-```
-
-_Or:_
-Execute:
 
 ```bash
 bash docker/stop-carla-docker.sh

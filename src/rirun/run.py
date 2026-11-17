@@ -26,6 +26,7 @@ from rirun.kinetics.vehicle_models import (
 from rirun.kinetics.vehicle_tools import Vehicle, spawn_behavior_npcs
 from rirun.PCLA.PCLA_agents import PCLA_Agent, check_agent_env
 from rirun.utils.bling import rirun
+from rirun.utils.camera_placement import point_centroid, stationary_camera_warning
 from rirun.utils.carla_tools import load_map
 from rirun.utils.spinner import Spinner
 from rirun.utils.video_tools import StreamingCamera
@@ -634,6 +635,26 @@ def main() -> None:
         # Primary display index: the resolved display camera mode.
         _display_idx = _record_modes.index(_display_mode)
 
+        # Reference point for the stationary camera placement warning: the
+        # centroid of the vehicles spawned at start (where the server streams
+        # map tiles on tiled DTT maps), or the map center when nothing is
+        # spawned yet.
+        _spawned_locs = []
+        for v in vehicles:
+            if not v._destroyed and v.is_spawned() and v.get_actor() is not None:
+                _loc = v.get_actor().get_location()
+                _spawned_locs.append((_loc.x, _loc.y, _loc.z))
+        _cam_ref = point_centroid(_spawned_locs)
+        _cam_ref_label = "vehicle cloud centroid"
+        if _cam_ref is None:
+            _cam_ref = point_centroid(
+                (
+                    (t.location.x, t.location.y, t.location.z)
+                    for t in world.get_map().get_spawn_points()
+                )
+            )
+            _cam_ref_label = "map center"
+
         cams = []  # list of [mode, ego_vehicle_or_None, StreamingCamera]
         _positions = args.overhead_camera_position  # list of (x, y, z) or None
         _overhead_pos_idx = (
@@ -658,6 +679,12 @@ def main() -> None:
                 else:
                     _cam_pos = (0, 0, 50)
                 _overhead_pos_idx += 1
+                if _mode == "stationary_overhead":
+                    _placement_warning = stationary_camera_warning(
+                        _cam_pos, _cam_ref, _cam_ref_label
+                    )
+                    if _placement_warning:
+                        logging.warning(_placement_warning)
             else:
                 _cam_pos = (0, 0, 50)  # unused by dashcam
             _c = StreamingCamera(

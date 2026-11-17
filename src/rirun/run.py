@@ -636,15 +636,19 @@ def main() -> None:
         _display_idx = _record_modes.index(_display_mode)
 
         # Reference point for the stationary camera placement warning: the
-        # centroid of the vehicles spawned at start (where the server streams
-        # map tiles on tiled DTT maps), or the map center when nothing is
-        # spawned yet.
-        _spawned_locs = []
+        # centroid of the vehicles' spawn positions (first trajectory point,
+        # in world coordinates — the same location Vehicle.spawn() uses), or
+        # the map center when no vehicles are defined. Trajectory points are
+        # used instead of actor.get_location() because the client-side actor
+        # cache is only refreshed on world ticks and is still (0, 0, 0)
+        # before the first tick.
+        _spawn_locs = []
         for v in vehicles:
-            if not v._destroyed and v.is_spawned() and v.get_actor() is not None:
-                _loc = v.get_actor().get_location()
-                _spawned_locs.append((_loc.x, _loc.y, _loc.z))
-        _cam_ref = point_centroid(_spawned_locs)
+            if v._destroyed:
+                continue
+            _loc = v.first_trajectory_point.transform.location
+            _spawn_locs.append((_loc.x, _loc.y, _loc.z))
+        _cam_ref = point_centroid(_spawn_locs)
         _cam_ref_label = "vehicle cloud centroid"
         if _cam_ref is None:
             _cam_ref = point_centroid(

@@ -1,42 +1,28 @@
 # xodr-plot
 
-A simple CLI tool to visualise **OpenDRIVE (.xodr)** road-network files using Matplotlib.
-
-## Features
-
-- **Dark map aesthetic** — dark background with colour-coded filled lanes
-- **Lane types** — driving, shoulder, sidewalk, parking, median, biking, restricted, and more, each with a distinct colour
-- **Junctions** — highlighted with brighter lane tints and dashed orange reference lines
-- **Reference lines** — gold for normal roads, dashed orange for junction connecting roads
-- **All geometry primitives** — line, arc, clothoid/spiral, poly3, paramPoly3
+A simple CLI tool to visualise **OpenDRIVE (.xodr)** road-network files using Matplotlib
+and to plot agent routes.
 
 ## Requirements
 
-- Python ≥ 3.8
-- `matplotlib` ≥ 3.5
-- `numpy` ≥ 1.21
+- `uv`
 
 ## Installation
 
 ```bash
-pip install .
-```
-
-This installs the `xodr-plot` command globally.
-
-Alternatively, run directly without installing:
-
-```bash
-python -m xodr_plot path/to/map.xodr
+uv sync
 ```
 
 ## Usage
 
 ```bash
-xodr-plot path/to/map.xodr
+uv run xodr-plot path/to/map.xodr
 ```
 
-A Matplotlib window will open showing the visualised road network. Close the window to exit.
+A Matplotlib window will open showing the visualised road network.
+Click inside the window to set waypoints and their orientation. Upon closing the plot
+window, the waypoints will be printed as a `xml` route to `stdout`.
+The resulting `xml` route has the correct format required for `PCLA` agent routes.
 
 ## Map legend
 

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xodr-plot"
-version = "0.2.0"
-description = "CLI tool to visualise OpenDRIVE (.xodr) files with Matplotlib"
+version = "0.2.1"
+description = "CLI tool to visualise OpenDRIVE (.xodr) files with Matplotlib and create agent routes"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [

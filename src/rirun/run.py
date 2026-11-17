@@ -477,6 +477,20 @@ def main() -> None:
             )
 
     # Prepare vehicles on rails and initial speed vectors
+    #
+    # On tiled Digital Twin Tool maps the server's LargeMapManager streams map
+    # tiles around "hero" actors (role_name contains "hero") and destroys
+    # actors that end up outside the streamed area; destroying a live sensor
+    # crashes the server (SIGSEGV in ASensor::EndPlay). With no ego agent the
+    # NPCs themselves must be the heroes so they (and any camera attached to
+    # them) are never destroyed and map tiles stream around the scene. With an
+    # ego agent, the ego vehicle already is the hero.
+    npc_role_name = "npc" if args.ego_agent else "hero"
+    if npc_role_name == "hero":
+        logging.info(
+            "No ego agent: NPC vehicles are given the 'hero' role so that "
+            "tiled DTT maps stream around them and never destroy them."
+        )
     vehicles = []
     start_vectors = []
     for trajectory, vehicle_name, trajectory_file in trajectories_list:
@@ -519,6 +533,7 @@ def main() -> None:
             blueprint=blueprint,
             color=color_from_filename(trajectory_file),
             height_m=height_m,
+            role_name=npc_role_name,
         )
         vehicles.append(new_vehicle)
         heading, speed_kmh = (
@@ -700,6 +715,10 @@ def main() -> None:
                 preferred_fourccs=["mp4v"],
                 ego_vehicle=_cam_ego,
                 display_camera=_mode,
+                # A stationary camera is an observation point: as a "hero" the
+                # DTT LargeMapManager streams map tiles around it and never
+                # destroys it (destroying a live sensor crashes the server).
+                role_name="hero" if _mode == "stationary_overhead" else None,
             )
             _c.timestamp_offset = -simulation_start_time
             cams.append([_mode, _cam_ego, _c])

@@ -118,6 +118,7 @@ class StreamingCamera:
         timestamp_offset=0,
         ego_vehicle: Optional[Actor] = None,
         display_camera: str = "stationary_overhead",
+        role_name: Optional[str] = None,
     ) -> None:
         """
         Args:
@@ -135,6 +136,9 @@ class StreamingCamera:
             overlay_timestamp: overlay "Time: <t>" on each frame (in BGR).
             preferred_fourccs: tried in order until one opens; defaults inside.
             ego_vehicle: optional vehicle to attach camera to. If provided, loc is relative to the vehicle.
+            role_name: optional role_name blueprint attribute. "hero" makes the DTT
+                LargeMapManager treat the camera as a reference actor (map tiles are
+                streamed around it and it is never put to sleep).
         """
         self._world = world
         self._width = width
@@ -155,6 +159,8 @@ class StreamingCamera:
         bp = world.get_blueprint_library().find("sensor.camera.rgb")
         bp.set_attribute("image_size_x", str(self._width))
         bp.set_attribute("image_size_y", str(self._height))
+        if role_name is not None and bp.has_attribute("role_name"):
+            bp.set_attribute("role_name", role_name)
 
         if ego_vehicle:
             tf, attachment, fov = self._ego_camera_transform(

@@ -73,6 +73,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--apply-xodr-offset",
+        action="store_true",
+        help=(
+            "Transform the output coordinates from the recording's geodetic "
+            "frame (e.g. UTM easting/northing) into the local frame of the "
+            "OpenDrive map embedded in the recording (its header <offset> "
+            "element; rotated by the offset's hdg if non-zero). Use when "
+            "the CARLA map was cooked from that OpenDrive file (e.g. DTT "
+            "maps). Fails if the recording contains no OpenDrive map."
+        ),
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -95,10 +107,14 @@ def main(argv=None) -> int:
             types=_types_from_arg(args.types),
             min_frames=args.min_frames,
             heading_mode=args.heading_mode,
+            apply_xodr_offset=args.apply_xodr_offset,
         )
     except ImportError as e:
         logging.error(str(e))
         return 2
+    except RuntimeError as e:
+        logging.error(str(e))
+        return 1
     return 0
 
 

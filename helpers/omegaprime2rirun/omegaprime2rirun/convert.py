@@ -16,8 +16,9 @@ omega-prime / betterosi stack (Python >= 3.10, see this project's pyproject).
 import logging
 import math
 import os
+import re
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 # osi3.MovingObject.Type values
 TYPE_UNKNOWN = 0
@@ -59,8 +60,9 @@ class VehicleTrace:
     """One vehicle extracted from an OmegaPrime recording.
 
     ``rows`` are (x, y, t, heading_deg) tuples in the source coordinate
-    frame (e.g. UTM easting/northing), sorted by time. ``heading_deg`` is
-    already converted to the frame rirun expects (see
+    frame (e.g. UTM easting/northing; the OpenDRIVE local frame when the
+    trace was extracted with ``apply_xodr_offset``), sorted by time.
+    ``heading_deg`` is already converted to the frame rirun expects (see
     :func:`heading_for_rirun`). ``t`` is absolute trace time in seconds.
     """
 
@@ -86,6 +88,108 @@ def heading_for_rirun(yaw_rad: float) -> float:
     convention as the savant2rirun CSVs rirun already ingests.
     """
     return (-math.degrees(yaw_rad)) % 360.0
+
+
+# Matches the header <offset .../> element of an OpenDRIVE document. COSMO
+# recordings namespace-qualify all xodr tags (the default namespace), so this
+# matches the raw tag name instead of using a namespace-aware XML lookup.
+_XODR_OFFSET_RE = re.compile(r"<offset\s+([^>]*?)/?>")
+_XODR_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
+
+
+def parse_xodr_offset(xodr: str) -> Optional[Tuple[float, float, float, float]]:
+    """Extract the header ``<offset>`` element of an OpenDRIVE document.
+
+    Args:
+        xodr: The OpenDRIVE XML document (e.g. the map embedded in an
+            OmegaPrime recording).
+
+    Returns:
+        ``(x, y, z, hdg)`` with ``x``/``y``/``z`` in meters and ``hdg`` in
+        radians, or ``None`` if the document has no ``<offset>`` element.
+        Missing attributes default to zero, mirroring the OpenDRIVE
+        specification defaults.
+
+    Raises:
+        RuntimeError: If the element is present but an attribute value is
+            not a number.
+    """
+    match = _XODR_OFFSET_RE.search(xodr)
+    if match is None:
+        return None
+    attrs = dict(_XODR_ATTR_RE.findall(match.group(1)))
+    try:
+        x = float(attrs.get("x", "0"))
+        y = float(attrs.get("y", "0"))
+        z = float(attrs.get("z", "0"))
+        hdg = math.radians(float(attrs.get("hdg", "0")))
+    except ValueError:
+        raise RuntimeError(
+            "Malformed <offset> element in OpenDrive header: {0}".format(match.group(0))
+        )
+    return x, y, z, hdg
+
+
+def apply_xodr_offset_to_rows(
+    rows: Sequence[Tuple[float, float, float, float]],
+    offset: Tuple[float, float, float, float],
+) -> List[Tuple[float, float, float, float]]:
+    """Transform (x, y, t, heading_deg) rows from the recording's geodetic
+    frame (e.g. UTM easting/northing) into the OpenDRIVE local frame.
+
+    The OpenDRIVE header ``<offset>`` relates the document's local (x, y)
+    frame to the geodetic reference frame by
+    ``geodetic = offset + R(hdg) * local``; this applies the inverse
+    transform. The heading is rotated into the local frame as well (with the
+    opposite sign to the position rotation, because rirun CSV headings are
+    the negated source yaw, see :func:`heading_for_rirun`). The ``z`` of the
+    offset is ignored: rirun CSVs are 2-D.
+    """
+    ox, oy, _oz, hdg = offset
+    if hdg == 0.0:
+        return [(x - ox, y - oy, t, h) for x, y, t, h in rows]
+    cos_h = math.cos(hdg)
+    sin_h = math.sin(hdg)
+    deg_h = math.degrees(hdg)
+    return [
+        (
+            cos_h * (x - ox) + sin_h * (y - oy),
+            -sin_h * (x - ox) + cos_h * (y - oy),
+            t,
+            (h + deg_h) % 360.0,
+        )
+        for x, y, t, h in rows
+    ]
+
+
+def xodr_offset_from_recording(
+    recording, mcap_path: str
+) -> Tuple[float, float, float, float]:
+    """The OpenDRIVE header ``<offset>`` of the map embedded in a recording.
+
+    Args:
+        recording: An ``omega_prime.Recording``; anything with a ``.map``
+            attribute exposing the raw document as ``odr_xml`` works.
+        mcap_path: Path of the source recording, used in error messages.
+
+    Raises:
+        RuntimeError: If the recording carries no OpenDRIVE map, or the
+            map's header has no ``<offset>`` element.
+    """
+    xodr = getattr(getattr(recording, "map", None), "odr_xml", None)
+    if not xodr:
+        raise RuntimeError(
+            "No OpenDrive map found in {0}: cannot apply the xodr offset. "
+            "Convert without --apply-xodr-offset and align the CSVs with "
+            "rirun's --npc_trajectory_offset instead.".format(mcap_path)
+        )
+    offset = parse_xodr_offset(xodr)
+    if offset is None:
+        raise RuntimeError(
+            "The OpenDrive map in {0} has no <offset> element in its "
+            "header: cannot apply the xodr offset.".format(mcap_path)
+        )
+    return offset
 
 
 def vehicle_csv_name(idx: int, subtype: int, size_m: float) -> str:
@@ -127,6 +231,7 @@ def extract_vehicles(
     mcap_path: str,
     types: Sequence[int] = (TYPE_VEHICLE,),
     min_frames: int = 3,
+    apply_xodr_offset: bool = False,
 ) -> Tuple[List[VehicleTrace], Dict[str, int]]:
     """Extract per-vehicle traces from an OmegaPrime .mcap file.
 
@@ -134,6 +239,11 @@ def extract_vehicles(
         mcap_path: Path to an OmegaPrime .mcap file (OSI ground truth).
         types: osi3.MovingObject.Type values to include (default: VEHICLE).
         min_frames: Minimum number of frames an object needs to be included.
+        apply_xodr_offset: If True, transform the trace coordinates from the
+            recording's geodetic frame (e.g. UTM) into the local frame of
+            the OpenDRIVE map embedded in the recording (its header
+            ``<offset>`` element). Use when the target CARLA map was cooked
+            from that OpenDRIVE file (e.g. DTT maps).
 
     Returns:
         ``(traces, skip_counts)`` with ``traces`` sorted by object id and
@@ -142,6 +252,8 @@ def extract_vehicles(
 
     Raises:
         ImportError: If omega-prime is not available (wrong environment).
+        RuntimeError: If ``apply_xodr_offset`` is set but the recording
+            carries no OpenDRIVE map with an ``<offset>`` element.
     """
     try:
         import polars as pl
@@ -156,6 +268,15 @@ def extract_vehicles(
 
     logging.info("Reading OmegaPrime recording: %s", mcap_path)
     recording = Recording.from_file(str(mcap_path))
+
+    xodr_offset = None
+    if apply_xodr_offset:
+        xodr_offset = xodr_offset_from_recording(recording, mcap_path)
+        logging.info(
+            "Applying OpenDrive header offset: x=%.4f y=%.4f z=%.4f hdg=%.4f rad",
+            *xodr_offset,
+        )
+
     df = recording.df
     if df.height == 0:
         logging.warning("No moving objects found in %s", mcap_path)
@@ -211,6 +332,8 @@ def extract_vehicles(
             )
             for p in pts
         ]
+        if xodr_offset is not None:
+            rows = apply_xodr_offset_to_rows(rows, xodr_offset)
         traces.append(
             VehicleTrace(
                 idx=row["idx"],
@@ -232,6 +355,7 @@ def convert_mcap(
     types: Sequence[int] = (TYPE_VEHICLE,),
     min_frames: int = 3,
     heading_mode: str = "trace",
+    apply_xodr_offset: bool = False,
 ) -> List[str]:
     """Convert an OmegaPrime .mcap file to per-vehicle rirun CSVs in ``outdir``.
 
@@ -243,9 +367,18 @@ def convert_mcap(
         heading_mode: "trace" writes the trace yaw as 4th column;
             "straight"/"spline" write 3-column CSVs and let rirun derive
             the headings at run time.
+        apply_xodr_offset: If True, transform the coordinates from the
+            recording's geodetic frame (e.g. UTM) into the local frame of
+            the OpenDRIVE map embedded in the recording (its header
+            ``<offset>`` element). Use when the target CARLA map was cooked
+            from that OpenDRIVE file (e.g. DTT maps).
 
     Returns:
         List of written file paths.
+
+    Raises:
+        RuntimeError: If ``apply_xodr_offset`` is set but the recording
+            carries no OpenDRIVE map with an ``<offset>`` element.
     """
     if heading_mode not in HEADING_MODES:
         raise ValueError(
@@ -255,7 +388,10 @@ def convert_mcap(
         )
 
     traces, skip_counts = extract_vehicles(
-        mcap_path, types=types, min_frames=min_frames
+        mcap_path,
+        types=types,
+        min_frames=min_frames,
+        apply_xodr_offset=apply_xodr_offset,
     )
     if not traces:
         logging.warning(

@@ -165,7 +165,7 @@ uv run omegaprime2csv /path/OmegaPrime_xxx.mcap -o /tmp/omega_csvs
 python src/rirun/run.py <duration> <map> -tf /tmp/omega_csvs/*.csv --npc_trajectory_offset <X> <Y>
 ```
 
-CSVs are named `vehicle_{id}_{type}_{size}.csv` (size = vehicle length in m), so rirun automatically picks the closest CARLA vehicle model. See `omegaprime2csv --help` for options.
+CSVs are named `vehicle_{id}_{type}_{size}.csv` (size = vehicle length in m), so rirun automatically picks the closest CARLA vehicle model. Coordinates are written in the recording's geodetic frame (e.g. UTM); if the target map was cooked from the OpenDrive file embedded in the recording (e.g. DTT maps), pass `--apply-xodr-offset` to transform the CSVs into that map's local frame instead of using `--npc_trajectory_offset`. See `omegaprime2csv --help` for options.
 
 ## Processing `.parquet` trajectories
 

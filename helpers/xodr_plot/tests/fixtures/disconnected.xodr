@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+    <header revMajor="1" revMinor="4" name="disconnected-test" version="1" date="2026-01-01" north="50" south="-50" east="200" west="-50" vendor="xodr-plot-test"/>
+    <!-- Two one-way roads with a 50 m gap between them, linked A -> B only.
+         CARLA's OpenDRIVE importer drops roads that are not connected to
+         the main network, so two fully isolated roads would not both
+         survive the import. A one-way pair linked in a single direction
+         does survive (it is one connected component), and the planner's
+         directed graph has no path from B back to A: any route from a
+         point on road B to a point on road A must fail with
+         NetworkXNoPath. -->
+    <road name="road A" length="50" id="1" junction="-1">
+        <link>
+            <successor elementType="road" elementId="2" contactPoint="start"/>
+        </link>
+        <planView>
+            <geometry s="0" x="0" y="0" hdg="0" length="50">
+                <line/>
+            </geometry>
+        </planView>
+        <lanes>
+            <laneSection s="0">
+                <left>
+                    <lane id="1" type="driving" level="false">
+                        <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+                    </lane>
+                </left>
+                <right>
+                    <lane id="0" type="none" level="false"/>
+                </right>
+            </laneSection>
+        </lanes>
+    </road>
+    <road name="road B" length="50" id="2" junction="-1">
+        <link>
+            <predecessor elementType="road" elementId="1" contactPoint="end"/>
+        </link>
+        <planView>
+            <geometry s="0" x="100" y="0" hdg="0" length="50">
+                <line/>
+            </geometry>
+        </planView>
+        <lanes>
+            <laneSection s="0">
+                <left>
+                    <lane id="1" type="driving" level="false">
+                        <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+                    </lane>
+                </left>
+                <right>
+                    <lane id="0" type="none" level="false"/>
+                </right>
+            </laneSection>
+        </lanes>
+    </road>
+</OpenDRIVE>

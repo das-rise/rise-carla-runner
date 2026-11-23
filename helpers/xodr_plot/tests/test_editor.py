@@ -251,6 +251,46 @@ def test_test_button_runs_worker_and_shows_result(editor, monkeypatch):
     assert len(plt.get_fignums()) >= 2
 
 
+def test_test_overlay_is_drawn_in_plot_coordinates(editor, monkeypatch):
+    """The traced route is returned in CARLA coords (x, y); the map is drawn
+    in plot coords (y_carla, x_carla). The overlay must be transformed, or
+    it appears transposed on the map."""
+    planner = pytest.importorskip("xodr_plot.planner")
+
+    # A path running along CARLA x from (0, 5) to (10, 5) at constant
+    # CARLA y=5 → must appear as plot x=5 constant (plot_x = y_carla),
+    # plot y 0→10 (plot_y = x_carla).
+    fake_result = planner.RouteTestResult(
+        segments=[
+            planner.SegmentResult(
+                start_index=0,
+                ok=True,
+                points=[(0.0, 5.0), (5.0, 5.0), (10.0, 5.0)],
+                length_m=10.0,
+            )
+        ],
+        warnings=[],
+    )
+    monkeypatch.setattr(planner, "check_route", lambda *a, **k: fake_result)
+
+    class _FakeServer:
+        def ensure_ready(self, progress_cb=None):
+            return "FAKE_MAP"
+
+        def teardown(self):
+            pass
+
+    editor.server = _FakeServer()
+    click(editor, 0.0, 0.0)
+    click(editor, 100.0, 0.0)
+    editor._on_test_clicked(None)
+    assert wait_for(editor, lambda: not editor._test_running)
+    line = editor._test_artists[0]
+    xs, ys = line.get_data()
+    assert list(xs) == pytest.approx([5.0, 5.0, 5.0])
+    assert list(ys) == pytest.approx([0.0, 5.0, 10.0])
+
+
 def test_test_button_shows_error_on_server_failure(editor, monkeypatch):
     from xodr_plot.carla_server import CarlaServerError
 

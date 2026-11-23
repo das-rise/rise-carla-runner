@@ -552,7 +552,9 @@ class RouteEditor:
         ax = self.ax
         for seg in result.segments:
             if seg.points:
-                pts = np.array(seg.points)
+                # seg.points are CARLA coordinates (x, y); the map is drawn
+                # in plot coordinates (y_carla, x_carla).
+                pts = np.array([Route.carla_to_plot(x, y) for x, y in seg.points])
                 (line,) = ax.plot(
                     pts[:, 0],
                     pts[:, 1],

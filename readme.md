@@ -127,6 +127,9 @@ bash docker/start-carla-docker.sh path/to/cooked_map.tar.gz
 > [!NOTE]
 > The CARLA source in this image is stock `0.9.15` plus the *runtime* C++ subset of the DTT patch (`docker/patches/carla-0.9.15-digital-twin.patch`), which is what makes single-level DTT maps simulatable.
 
+> [!WARNING]
+> Full compatibility is only granted for DTT maps created from an OpenDRIVE **1.4** file, not from a 1.8 file. Maps cooked from 1.8 exports can fail in two ways: 1.8-only features such as `type="virtual"` junctions crash the engine during world construction, and 1.8 exports with broken topology (undefined junction references, missing predecessor/successor links) load but leave the road graph unusable, so route planning fails even though the map is clearly navigable. Re-export the map as OpenDRIVE 1.4 before cooking if you can.
+
 ## Example run
 
 Execute:

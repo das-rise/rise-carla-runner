@@ -4,13 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xodr-plot"
-version = "0.2.1"
-description = "CLI tool to visualise OpenDRIVE (.xodr) files with Matplotlib and create agent routes"
+version = "0.3.0"
+description = "CLI tool to visualise OpenDRIVE (.xodr) files with Matplotlib, create/edit agent routes, and test them against CARLA"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "matplotlib>=3.5",
     "numpy>=1.21",
+    # Route testing: uses the user's CARLA container (docker start if stopped)
+    # and traces the route with the same GlobalRoutePlanner the PCLA agents
+    # use at runtime.
+    # The `carla` Python API only ships wheels for cp37–cp310, so the marker
+    # keeps the package installable on newer Pythons — there, the route-test
+    # feature reports a friendly error and plain visualisation is unaffected.
+    "carla==0.9.15; python_version < '3.11'",
+    "networkx>=2.6",
+]
+
+# Dev tools: installed automatically by `uv sync` / `uv run` (ignored by pip).
+[dependency-groups]
+dev = [
+    "pytest>=7",
 ]
 
 [project.scripts]

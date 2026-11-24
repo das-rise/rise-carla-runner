@@ -127,6 +127,9 @@ bash docker/start-carla-docker.sh path/to/cooked_map.tar.gz
 > [!NOTE]
 > The CARLA source in this image is stock `0.9.15` plus the *runtime* C++ subset of the DTT patch (`docker/patches/carla-0.9.15-digital-twin.patch`), which is what makes single-level DTT maps simulatable.
 
+> [!WARNING]
+> Full compatibility is only granted for DTT maps created from an OpenDRIVE **1.4** file, not from a 1.8 file. Maps cooked from 1.8 exports can fail in two ways: 1.8-only features such as `type="virtual"` junctions crash the engine during world construction, and 1.8 exports with broken topology (undefined junction references, missing predecessor/successor links) load but leave the road graph unusable, so route planning fails even though the map is clearly navigable. Re-export the map as OpenDRIVE 1.4 before cooking if you can.
+
 ## Example run
 
 Execute:
@@ -196,7 +199,26 @@ xodr-plot path/to/opendrive.xodr
 cd helpers/xodr_plot
 uv synv && uv run xodr-plot path/to/opendrive.xodr
 ```
-Then, place waypoints by clicking on the map and then adjusting the waypoint angle in the popup. Add as many waypoints as required. Upon closing the plot window, the entire `.xml` route is printed to `stdout` and can be copy-pasted to some `agent-route.xml` file.
+Place waypoints by clicking on the map; all waypoints stay visible as numbered
+markers with heading arrows and can be edited interactively: click a waypoint to
+change its heading (slider in the bottom-left panel), drag it to move it,
+right-click to delete it, or click on the route line to insert a waypoint
+between two others. Add as many waypoints as required. Upon closing the plot
+window, the entire `.xml` route is printed to `stdout` and can be copy-pasted
+to some `agent-route.xml` file (with `--output <file>` it is also written
+directly to that file; `--load <file>` opens an existing route for editing).
+
+Before using a route in a simulation you can verify that it is drivable: the
+`Test route` button in the plot window (or headless, `xodr-plot
+path-to-opendrive.xodr --test-route route.xml`) traces the route through
+CARLA's `GlobalRoutePlanner` — the same planner the PCLA agents use at
+runtime — and reports per-segment success. For this the tool uses your
+existing CARLA container (by default `CARLA-0.9.15`, the one created by
+`bash docker/start-carla-docker.sh`; override with `--carla-container`),
+starting it with `docker start` if it is stopped. Note that a test loads the
+map into that container (replacing its world, exactly like the rirun flow),
+and leaves the container running afterwards. Unroutable segments are flagged
+so you can fix the route and test again.
 
 ## PCLA addendum
 

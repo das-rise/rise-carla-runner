@@ -191,9 +191,13 @@ python -m traj_convert traj.parquet osi 752 0.1.0 "" "Town01.xodr" -o output.osi
 
 ## PCLA agent route generation
 
-To generate agent route `.xml` files, use the `xodr-plot` tool (installed with the project from `helpers/xodr_plot/`).
+To generate agent route `.xml` files, use the `xodr-plot` tool (installed into the `conda` environment with the project from `helpers/xodr_plot/`).
 ```bash
-xodr-plot path-to-opendrive.xodr
+# with the activated `conda` environment
+xodr-plot path/to/opendrive.xodr
+# without the `conda environment`
+cd helpers/xodr_plot
+uv synv && uv run xodr-plot path/to/opendrive.xodr
 ```
 Place waypoints by clicking on the map; all waypoints stay visible as numbered
 markers with heading arrows and can be edited interactively: click a waypoint to
